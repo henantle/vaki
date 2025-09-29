@@ -1,0 +1,24 @@
+name: vainamoinen
+description: Full-stack educational content management system
+
+github:
+  repo: henantle/vainamoinen
+  base_branch: main
+  username: henantle
+  email: henri.a.lehtinen@outlook.com
+
+# Issue filters
+filters:
+  assignee: henantle
+  labels: []  # Optional: filter by labels
+  state: open
+
+# Workspace settings
+workspace:
+  temp_dir: workspaces
+
+# Project context file
+context: contexts/vainamoinen.md
+
+# System prompt template
+prompt_template: prompts/templates/fullstack-monorepo.md
