@@ -5,6 +5,7 @@ from github import Github
 from github.Issue import Issue
 from github.Repository import Repository
 from github.PullRequest import PullRequest
+import warnings
 
 
 class GitHubClient:
@@ -65,7 +66,19 @@ class GitHubClient:
         )
 
     def get_repo_url_with_token(self, repo_name: str) -> str:
-        """Get repository clone URL with authentication token."""
+        """
+        Get repository clone URL with authentication token.
+
+        ⚠️  SECURITY WARNING: This method returns a URL with embedded credentials.
+        The returned URL should NEVER be logged, printed, or displayed.
+        Use only for git operations and handle with extreme care.
+        """
+        warnings.warn(
+            "get_repo_url_with_token returns sensitive credentials. "
+            "Never log or display this URL.",
+            SecurityWarning,
+            stacklevel=2
+        )
         return f"https://{self.token}@github.com/{repo_name}.git"
 
     def comment_on_issue(self, repo_name: str, issue_number: int, message: str):

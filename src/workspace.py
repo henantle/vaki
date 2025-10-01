@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 from github.Issue import Issue
+from .security import sanitize, sanitize_url
 
 
 class WorkspaceManager:
@@ -74,7 +75,7 @@ class WorkspaceManager:
             )
 
             if result.returncode != 0:
-                print(f"⚠️  Warning: Could not checkout {base_branch}: {result.stderr}")
+                print(f"⚠️  Warning: Could not checkout {base_branch}: {sanitize(result.stderr)}")
                 return False
 
             # Pull latest changes
@@ -105,7 +106,7 @@ class WorkspaceManager:
             return True
 
         except Exception as e:
-            print(f"❌ Error preparing workspace: {e}")
+            print(f"❌ Error preparing workspace: {sanitize(str(e))}")
             return False
 
     def create_task_file(
@@ -219,8 +220,8 @@ The orchestrator will handle PR creation automatically.
                 )
             else:
                 # Other error, raise it
-                print(f"❌ Push failed: {result.stderr}")
-                raise subprocess.CalledProcessError(result.returncode, result.args, result.stderr)
+                print(f"❌ Push failed: {sanitize(result.stderr)}")
+                raise subprocess.CalledProcessError(result.returncode, result.args, sanitize(result.stderr))
 
         print("✅ Changes pushed")
 
@@ -258,4 +259,4 @@ The orchestrator will handle PR creation automatically.
             )
             print(f"✅ Returned to {base_branch} branch")
         except Exception as e:
-            print(f"⚠️  Could not return to {base_branch}: {e}")
+            print(f"⚠️  Could not return to {base_branch}: {sanitize(str(e))}")

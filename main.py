@@ -72,6 +72,13 @@ def main():
         print("Please set GITHUB_TOKEN in .env file or environment")
         sys.exit(1)
 
+    # Register tokens for sanitization (SECURITY)
+    from src.security import register_token
+    register_token(github_token)
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if openai_api_key:
+        register_token(openai_api_key)
+
     # Parse command line arguments
     if len(sys.argv) < 2:
         print_banner()

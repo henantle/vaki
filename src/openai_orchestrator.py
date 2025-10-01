@@ -10,6 +10,7 @@ from .config import ConfigLoader, ProjectConfig
 from .github_client import GitHubClient
 from .workspace import WorkspaceManager
 from .openai_agent import OpenAIAgent
+from .security import sanitize
 
 
 class OpenAIOrchestrator:
@@ -228,7 +229,7 @@ Respond NOW with ONLY a JSON array:"""
             self.workspace_manager.return_to_base_branch(workspace, config.github.base_branch)
 
         except Exception as e:
-            print(f"\n❌ Error during automated implementation: {e}")
+            print(f"\n❌ Error during automated implementation: {sanitize(str(e))}")
             print(f"\n💡 You can manually check the branch:")
             print(f"  cd {workspace}")
             print(f"  git checkout {branch_name}")
@@ -473,7 +474,7 @@ Respond with JSON array of actions:"""
                 timeout=60
             )
 
-            output = result.stdout + result.stderr
+            output = sanitize(result.stdout + result.stderr)
             if result.returncode == 0:
                 return f"✅ Command succeeded: {command}\n{output[:200]}"
             else:
@@ -568,7 +569,7 @@ Respond with JSON array of actions:"""
             capture_output=True,
             text=True
         )
-        diff_content = diff_result.stdout[:6000]  # ~1.5k tokens
+        diff_content = sanitize(diff_result.stdout[:6000])  # ~1.5k tokens
 
         # SINGLE combined verification prompt
         combined_prompt = f"""Review this implementation against ALL quality criteria in ONE analysis.
@@ -806,7 +807,7 @@ Respond with JSON:
                 capture_output=True,
                 text=True
             )
-            diff_content = diff_result.stdout[:4000]  # ~1k tokens (aggressive)
+            diff_content = sanitize(diff_result.stdout[:4000])  # ~1k tokens (aggressive)
 
             verification_prompt = f"""You are verifying that an implementation correctly addresses a GitHub issue.
 
@@ -872,8 +873,8 @@ Respond with JSON:
                 return False, '\n'.join(issues_list)
 
         except Exception as e:
-            print(f"     ⚠️  Error during requirement verification: {e}")
-            return True, f"Error: {e}"
+            print(f"     ⚠️  Error during requirement verification: {sanitize(str(e))}")
+            return True, f"Error: {sanitize(str(e))}"
 
     def _verify_ui_functionality(
         self,
@@ -981,8 +982,8 @@ Respond with JSON:
                 return False, f"UI Issues:\n{issues_text}"
 
         except Exception as e:
-            print(f"   ⚠️  Error during UI validation: {e}")
-            return True, f"Error: {e}"
+            print(f"   ⚠️  Error during UI validation: {sanitize(str(e))}")
+            return True, f"Error: {sanitize(str(e))}"
 
     def _run_type_check(self, workspace: Path) -> tuple[bool, str]:
         """Run TypeScript type checking or equivalent."""
@@ -999,7 +1000,7 @@ Respond with JSON:
                 print("     ✅ Type checking passed")
                 return True, "Type checking passed"
             else:
-                error_msg = result.stderr[:500]
+                error_msg = sanitize(result.stderr[:500])
                 print(f"     ❌ Type errors found")
                 return False, error_msg
 
@@ -1016,7 +1017,7 @@ Respond with JSON:
                 print("     ✅ Type checking passed")
                 return True, "Type checking passed"
             else:
-                return False, result.stdout[:500]
+                return False, sanitize(result.stdout[:500])
 
         print("     ⚠️  No type checking configured, skipping")
         return True, "No type checking configured"
@@ -1043,12 +1044,12 @@ Respond with JSON:
                             print("     ✅ Tests passed")
                             return True, "Tests passed"
                         else:
-                            error_msg = result.stdout[-500:]
+                            error_msg = sanitize(result.stdout[-500:])
                             print(f"     ❌ Tests failed")
                             return False, error_msg
             except Exception as e:
-                print(f"     ⚠️  Error running tests: {e}")
-                return False, str(e)
+                print(f"     ⚠️  Error running tests: {sanitize(str(e))}")
+                return False, sanitize(str(e))
 
         # Python project
         if (workspace / "pytest.ini").exists() or (workspace / "pyproject.toml").exists():
@@ -1063,7 +1064,7 @@ Respond with JSON:
                 print("     ✅ Tests passed")
                 return True, "Tests passed"
             else:
-                error_msg = result.stdout[-500:]
+                error_msg = sanitize(result.stdout[-500:])
                 print(f"     ❌ Tests failed")
                 return False, error_msg
 
@@ -1091,12 +1092,12 @@ Respond with JSON:
                             print("     ✅ Build succeeded")
                             return True, "Build succeeded"
                         else:
-                            error_msg = result.stderr[-500:]
+                            error_msg = sanitize(result.stderr[-500:])
                             print(f"     ❌ Build failed")
                             return False, error_msg
             except Exception as e:
-                print(f"     ⚠️  Error running build: {e}")
-                return False, str(e)
+                print(f"     ⚠️  Error running build: {sanitize(str(e))}")
+                return False, sanitize(str(e))
 
         print("     ⚠️  No build configured, skipping")
         return True, "No build configured"
@@ -1175,8 +1176,8 @@ Check for:
                 return False, f"Quality Issues:\n{issues_text}"
 
         except Exception as e:
-            print(f"     ⚠️  Error during quality review: {e}")
-            return True, f"Error: {e}"
+            print(f"     ⚠️  Error during quality review: {sanitize(str(e))}")
+            return True, f"Error: {sanitize(str(e))}"
 
     def list_projects(self):
         """List all available projects."""
