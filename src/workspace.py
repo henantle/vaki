@@ -115,7 +115,7 @@ class WorkspaceManager:
         issue: Issue,
         context: str = "",
         prompt_template: str = ""
-    ):
+    ) -> None:
         """
         Create a TASK.md file with issue details and instructions.
 
@@ -169,7 +169,7 @@ The orchestrator will handle PR creation automatically.
 
         print(f"📋 Task file created: TASK.md")
 
-    def cleanup_task_file(self, workspace: Path):
+    def cleanup_task_file(self, workspace: Path) -> None:
         """Remove TASK.md file."""
         task_file = workspace / "TASK.md"
         if task_file.exists():
@@ -197,7 +197,7 @@ The orchestrator will handle PR creation automatically.
         )
         return result.stdout.strip()
 
-    def push_changes(self, workspace: Path, branch_name: str):
+    def push_changes(self, workspace: Path, branch_name: str) -> None:
         """Push changes to remote."""
         print(f"\n🚀 Pushing branch: {branch_name}")
 
@@ -225,7 +225,7 @@ The orchestrator will handle PR creation automatically.
 
         print("✅ Changes pushed")
 
-    def show_summary(self, workspace: Path, base_branch: str = "main"):
+    def show_summary(self, workspace: Path, base_branch: str = "main") -> None:
         """Show summary of changes."""
         print("\n" + "=" * 70)
         print("📊 CHANGES SUMMARY")
@@ -248,7 +248,7 @@ The orchestrator will handle PR creation automatically.
         )
         print("=" * 70)
 
-    def return_to_base_branch(self, workspace: Path, base_branch: str = "main"):
+    def return_to_base_branch(self, workspace: Path, base_branch: str = "main") -> None:
         """Return to base branch after PR creation."""
         try:
             subprocess.run(

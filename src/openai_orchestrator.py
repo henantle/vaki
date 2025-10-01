@@ -3,7 +3,7 @@
 import os
 import subprocess
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, TypedDict, Union, Literal
 from github.Issue import Issue
 
 from .config import ConfigLoader, ProjectConfig
@@ -13,10 +13,61 @@ from .openai_agent import OpenAIAgent
 from .security import sanitize
 
 
+# Action type definitions
+class ReadFileAction(TypedDict):
+    """Action to read a file."""
+    action: Literal["read_file"]
+    path: str
+
+
+class WriteFileAction(TypedDict):
+    """Action to write a file."""
+    action: Literal["write_file"]
+    path: str
+    content: str
+
+
+class EditFileAction(TypedDict):
+    """Action to edit a file."""
+    action: Literal["edit_file"]
+    path: str
+    search: str
+    replace: str
+
+
+class RunCommandAction(TypedDict):
+    """Action to run a command."""
+    action: Literal["run_command"]
+    command: str
+
+
+class CommitAction(TypedDict):
+    """Action to create a commit."""
+    action: Literal["commit"]
+    message: str
+
+
+class DoneAction(TypedDict):
+    """Action to signal completion."""
+    action: Literal["done"]
+    summary: str
+
+
+# Union of all action types
+Action = Union[
+    ReadFileAction,
+    WriteFileAction,
+    EditFileAction,
+    RunCommandAction,
+    CommitAction,
+    DoneAction
+]
+
+
 class OpenAIOrchestrator:
     """Orchestrates fully automated workflow using OpenAI API."""
 
-    def __init__(self, github_token: str, openai_api_key: str, base_dir: str = "."):
+    def __init__(self, github_token: str, openai_api_key: str, base_dir: str = ".") -> None:
         self.github_token = github_token
         self.config_loader = ConfigLoader(base_dir)
         self.github_client = GitHubClient(github_token)
@@ -24,7 +75,7 @@ class OpenAIOrchestrator:
         self.agent = OpenAIAgent(openai_api_key)
         self.max_iterations = 20  # Safety limit
 
-    def run_project(self, project_name: str, issue_number: Optional[int] = None):
+    def run_project(self, project_name: str, issue_number: Optional[int] = None) -> None:
         """
         Run the automated workflow for a project.
 
@@ -63,7 +114,7 @@ class OpenAIOrchestrator:
         for issue in issues:
             self._process_issue(issue, config)
 
-    def _process_issue(self, issue: Issue, config: ProjectConfig):
+    def _process_issue(self, issue: Issue, config: ProjectConfig) -> None:
         """Process a single issue with OpenAI agent."""
         print(f"\n{'=' * 70}")
         print(f"🤖 AUTO-PROCESSING ISSUE #{issue.number}")
@@ -235,7 +286,7 @@ Respond NOW with ONLY a JSON array:"""
             print(f"  git checkout {branch_name}")
             self.workspace_manager.return_to_base_branch(workspace, config.github.base_branch)
 
-    def _agent_loop(self, workspace: Path, initial_prompt: str):
+    def _agent_loop(self, workspace: Path, initial_prompt: str) -> None:
         """
         Run the agent loop to implement changes.
 
@@ -337,7 +388,7 @@ Respond with JSON array of actions:"""
 
     def _read_files(self, workspace: Path, file_paths: List[str]) -> str:
         """Read multiple files and return their contents with moderate truncation."""
-        contents = []
+        contents: List[str] = []
         max_file_size = 12000  # ~3k tokens per file
         max_total_size = 48000  # ~12k tokens total
         total_size = 0
@@ -360,39 +411,43 @@ Respond with JSON array of actions:"""
                     file_content = f"## {file_path}\n```\n{content}\n```\n"
                     contents.append(file_content)
                     total_size += len(file_content)
+                except UnicodeDecodeError:
+                    contents.append(f"## {file_path}\nError reading: Binary or non-UTF-8 file\n")
+                except IOError as e:
+                    contents.append(f"## {file_path}\nError reading: {sanitize(str(e))}\n")
                 except Exception as e:
-                    contents.append(f"## {file_path}\nError reading: {e}\n")
+                    contents.append(f"## {file_path}\nError reading: {sanitize(str(e))}\n")
             else:
                 contents.append(f"## {file_path}\nFile not found\n")
 
         return "\n".join(contents) if contents else "No files to read"
 
-    def _execute_actions(self, workspace: Path, actions: List[Dict[str, Any]]) -> str:
+    def _execute_actions(self, workspace: Path, actions: List[Action]) -> str:
         """
         Execute a list of actions.
 
         Args:
             workspace: Project workspace
-            actions: List of action dictionaries
+            actions: List of action dictionaries with proper type annotations
 
         Returns:
             Feedback message about executed actions
         """
-        results = []
+        results: List[str] = []
 
         for action in actions:
             action_type = action.get('action')
 
             if action_type == 'read_file':
-                result = self._action_read_file(workspace, action)
+                result = self._action_read_file(workspace, action)  # type: ignore
             elif action_type == 'write_file':
-                result = self._action_write_file(workspace, action)
+                result = self._action_write_file(workspace, action)  # type: ignore
             elif action_type == 'edit_file':
-                result = self._action_edit_file(workspace, action)
+                result = self._action_edit_file(workspace, action)  # type: ignore
             elif action_type == 'run_command':
-                result = self._action_run_command(workspace, action)
+                result = self._action_run_command(workspace, action)  # type: ignore
             elif action_type == 'commit':
-                result = self._action_commit(workspace, action)
+                result = self._action_commit(workspace, action)  # type: ignore
             elif action_type == 'done':
                 result = "✅ Marked as done"
             else:
@@ -403,9 +458,12 @@ Respond with JSON array of actions:"""
 
         return "\n".join(results)
 
-    def _action_read_file(self, workspace: Path, action: Dict[str, Any]) -> str:
+    def _action_read_file(self, workspace: Path, action: ReadFileAction) -> str:
         """Read a file."""
         file_path = action.get('path')
+        if not file_path:
+            return "❌ Error: No path specified"
+
         full_path = workspace / file_path
 
         if not full_path.exists():
@@ -416,12 +474,16 @@ Respond with JSON array of actions:"""
                 content = f.read()
             return f"✅ Read file: {file_path}\n```\n{content}\n```"
         except Exception as e:
-            return f"❌ Error reading {file_path}: {e}"
+            return f"❌ Error reading {file_path}: {sanitize(str(e))}"
 
-    def _action_write_file(self, workspace: Path, action: Dict[str, Any]) -> str:
+    def _action_write_file(self, workspace: Path, action: WriteFileAction) -> str:
         """Write/create a file."""
         file_path = action.get('path')
         content = action.get('content', '')
+
+        if not file_path:
+            return "❌ Error: No path specified"
+
         full_path = workspace / file_path
 
         try:
@@ -432,13 +494,17 @@ Respond with JSON array of actions:"""
                 f.write(content)
             return f"✅ Wrote file: {file_path}"
         except Exception as e:
-            return f"❌ Error writing {file_path}: {e}"
+            return f"❌ Error writing {file_path}: {sanitize(str(e))}"
 
-    def _action_edit_file(self, workspace: Path, action: Dict[str, Any]) -> str:
+    def _action_edit_file(self, workspace: Path, action: EditFileAction) -> str:
         """Edit a file by replacing text."""
         file_path = action.get('path')
         search = action.get('search', '')
         replace = action.get('replace', '')
+
+        if not file_path:
+            return "❌ Error: No path specified"
+
         full_path = workspace / file_path
 
         if not full_path.exists():
@@ -458,11 +524,14 @@ Respond with JSON array of actions:"""
 
             return f"✅ Edited file: {file_path}"
         except Exception as e:
-            return f"❌ Error editing {file_path}: {e}"
+            return f"❌ Error editing {file_path}: {sanitize(str(e))}"
 
-    def _action_run_command(self, workspace: Path, action: Dict[str, Any]) -> str:
+    def _action_run_command(self, workspace: Path, action: RunCommandAction) -> str:
         """Run a shell command."""
         command = action.get('command')
+
+        if not command:
+            return "❌ Error: No command specified"
 
         try:
             result = subprocess.run(
@@ -479,12 +548,17 @@ Respond with JSON array of actions:"""
                 return f"✅ Command succeeded: {command}\n{output[:200]}"
             else:
                 return f"⚠️  Command failed (exit {result.returncode}): {command}\n{output[:200]}"
+        except subprocess.TimeoutExpired:
+            return f"❌ Command timed out after 60 seconds: {command}"
         except Exception as e:
-            return f"❌ Error running command: {e}"
+            return f"❌ Error running command: {sanitize(str(e))}"
 
-    def _action_commit(self, workspace: Path, action: Dict[str, Any]) -> str:
+    def _action_commit(self, workspace: Path, action: CommitAction) -> str:
         """Create a git commit."""
         message = action.get('message', 'Automated commit')
+
+        if not message:
+            return "❌ Error: No commit message specified"
 
         try:
             # Add all changes
@@ -507,8 +581,10 @@ Respond with JSON array of actions:"""
                 return f"✅ Committed: {message}"
             else:
                 return f"⚠️  Nothing to commit or commit failed"
+        except subprocess.CalledProcessError as e:
+            return f"❌ Error adding files to git: {sanitize(str(e))}"
         except Exception as e:
-            return f"❌ Error committing: {e}"
+            return f"❌ Error committing: {sanitize(str(e))}"
 
     def _verify_implementation_combined(self, workspace: Path, context: str, prompt_template: str, issue: Issue) -> tuple[bool, str]:
         """
@@ -556,7 +632,8 @@ Respond with JSON array of actions:"""
                     if len(content) > max_file_chars:
                         content = content[:max_file_chars] + f"\n...(truncated)"
                     file_contents.append(f"## {file_path}\n```\n{content}\n```\n")
-                except:
+                except (UnicodeDecodeError, IOError, OSError):
+                    # Skip files that can't be read (binary, permissions, etc.)
                     pass
 
         if not file_contents:
@@ -650,340 +727,6 @@ Respond with JSON:
 
         return all_passed, feedback
 
-    def _verify_implementation_OLD(self, workspace: Path, context: str, prompt_template: str, issue: Issue) -> tuple[bool, str]:
-        """
-        Verify implementation quality and functionality.
-
-        Args:
-            workspace: Project workspace path
-            context: Project context
-            prompt_template: Coding standards template
-            issue: GitHub issue object
-
-        Returns:
-            Tuple of (verification passed boolean, feedback string)
-        """
-        verification_results = []
-        feedback_items = []
-        all_passed = True
-
-        # PHASE 2: Project Quality Guardrails
-        print("\n" + "─" * 70)
-        print("📋 PHASE 2: PROJECT QUALITY GUARDRAILS")
-        print("─" * 70)
-        print("Checking type safety, tests, and build...")
-
-        # 1. Run type checking / linting
-        print("\n  🔸 Type Checking...")
-        type_check_result, type_check_msg = self._run_type_check(workspace)
-        verification_results.append(("Type Check", type_check_result))
-        if not type_check_result:
-            all_passed = False
-            feedback_items.append(f"Type Check Failed: {type_check_msg}")
-
-        # 2. Run tests
-        print("\n  🔸 Running Tests...")
-        test_result, test_msg = self._run_tests(workspace)
-        verification_results.append(("Tests", test_result))
-        if not test_result:
-            all_passed = False
-            feedback_items.append(f"Tests Failed: {test_msg}")
-
-        # 3. Run build
-        print("\n  🔸 Building Project...")
-        build_result, build_msg = self._run_build(workspace)
-        verification_results.append(("Build", build_result))
-        if not build_result:
-            all_passed = False
-            feedback_items.append(f"Build Failed: {build_msg}")
-
-        # PHASE 3: Code Quality Standards
-        print("\n" + "─" * 70)
-        print("📐 PHASE 3: CODE QUALITY STANDARDS")
-        print("─" * 70)
-        print("AI reviewing code against project coding standards...")
-
-        quality_result, quality_msg = self._review_code_quality(workspace, context, prompt_template)
-        verification_results.append(("Code Quality", quality_result))
-        if not quality_result:
-            all_passed = False
-            feedback_items.append(f"Code Quality Issues: {quality_msg}")
-
-        # PHASE 4: Ticket Specifications
-        print("\n" + "─" * 70)
-        print("🎯 PHASE 4: TICKET SPECIFICATIONS")
-        print("─" * 70)
-        print("AI verifying implementation matches issue requirements...")
-
-        requirements_result, requirements_msg = self._verify_implementation_against_issue(
-            workspace, issue, context, prompt_template
-        )
-        verification_results.append(("Ticket Requirements", requirements_result))
-        if not requirements_result:
-            all_passed = False
-            feedback_items.append(f"Requirements Issues: {requirements_msg}")
-
-        # PHASE 5: User Interface Validation
-        print("\n" + "─" * 70)
-        print("👤 PHASE 5: USER INTERFACE VALIDATION")
-        print("─" * 70)
-        print("AI validating UI/UX works from user perspective...")
-
-        ui_result, ui_msg = self._verify_ui_functionality(
-            workspace, issue, context, prompt_template
-        )
-        verification_results.append(("UI/UX Validation", ui_result))
-        if not ui_result:
-            all_passed = False
-            feedback_items.append(f"UI/UX Issues: {ui_msg}")
-
-        # Print summary
-        print("\n" + "=" * 70)
-        print("📊 VERIFICATION SUMMARY")
-        print("=" * 70)
-        for check_name, passed in verification_results:
-            status = "✅" if passed else "❌"
-            print(f"{status} {check_name}")
-        print("=" * 70)
-
-        feedback = "\n".join(feedback_items) if feedback_items else "All checks passed"
-        return all_passed, feedback
-
-    def _verify_implementation_against_issue(
-        self,
-        workspace: Path,
-        issue: Issue,
-        context: str,
-        prompt_template: str
-    ) -> tuple[bool, str]:
-        """
-        Verify implementation matches issue specifications.
-
-        Args:
-            workspace: Project workspace path
-            issue: GitHub issue object
-            context: Project context
-            prompt_template: Coding standards template
-
-        Returns:
-            Tuple of (passed boolean, message string)
-        """
-        try:
-            # Get changed files
-            result = subprocess.run(
-                ["git", "diff", "--name-only", "HEAD~1"],
-                cwd=workspace,
-                capture_output=True,
-                text=True
-            )
-            changed_files = result.stdout.strip().split('\n')[:10]
-
-            # Read changed files with aggressive truncation
-            file_contents = []
-            max_file_chars = 5000  # ~1.25k tokens per file (aggressive)
-            for file_path in changed_files[:3]:  # Only 3 files max
-                full_path = workspace / file_path
-                if full_path.exists() and full_path.stat().st_size < 50000:
-                    try:
-                        with open(full_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-
-                        # Aggressive truncation
-                        if len(content) > max_file_chars:
-                            content = content[:max_file_chars] + f"\n...(truncated)"
-
-                        file_contents.append(f"## {file_path}\n```\n{content}\n```\n")
-                    except:
-                        pass
-
-            if not file_contents:
-                print("     ⚠️  No files to review")
-                return True, "No files to review"
-
-            # Get git diff for context (aggressive limit)
-            diff_result = subprocess.run(
-                ["git", "diff", "HEAD~1"],
-                cwd=workspace,
-                capture_output=True,
-                text=True
-            )
-            diff_content = sanitize(diff_result.stdout[:4000])  # ~1k tokens (aggressive)
-
-            verification_prompt = f"""You are verifying that an implementation correctly addresses a GitHub issue.
-
-# PROJECT CONTEXT
-{context}
-
-# CODING STANDARDS
-{prompt_template}
-
-# ORIGINAL ISSUE
-**Title**: {issue.title}
-**Description**:
-{issue.body or 'No description provided'}
-
-# IMPLEMENTATION (git diff)
-```diff
-{diff_content}
-```
-
-# CHANGED FILES
-{''.join(file_contents[:3])}  # Show first 3 files fully
-
-Analyze if the implementation:
-1. ✅ Addresses all requirements from the issue
-2. ✅ Implements the requested functionality completely
-3. ✅ Matches the expected behavior described in the issue
-4. ✅ Follows the project context and coding standards
-5. ✅ For UI changes: Would work correctly from user perspective
-
-Respond with JSON:
-{{
-  "matches_requirements": true/false,
-  "missing_requirements": ["req1", "req2"],
-  "concerns": ["concern1", "concern2"],
-  "summary": "brief assessment",
-  "user_facing_changes": "description of UI changes if any"
-}}
-"""
-
-            response = self.agent.send_message(verification_prompt)
-            review = self.agent.parse_json_response(response)
-
-            if not review:
-                print("     ⚠️  Could not parse verification response")
-                return True, "Could not parse verification"
-
-            if review.get('matches_requirements', False):
-                print(f"     ✅ Implementation matches issue requirements")
-                if review.get('summary'):
-                    print(f"        {review['summary']}")
-                if review.get('user_facing_changes'):
-                    print(f"        UI: {review['user_facing_changes']}")
-                return True, "Requirements matched"
-            else:
-                issues_list = []
-                print(f"     ❌ Implementation issues found:")
-                for req in review.get('missing_requirements', []):
-                    print(f"        - Missing: {req}")
-                    issues_list.append(f"Missing: {req}")
-                for concern in review.get('concerns', []):
-                    print(f"        - Concern: {concern}")
-                    issues_list.append(f"Concern: {concern}")
-                return False, '\n'.join(issues_list)
-
-        except Exception as e:
-            print(f"     ⚠️  Error during requirement verification: {sanitize(str(e))}")
-            return True, f"Error: {sanitize(str(e))}"
-
-    def _verify_ui_functionality(
-        self,
-        workspace: Path,
-        issue: Issue,
-        context: str,
-        prompt_template: str
-    ) -> tuple[bool, str]:
-        """
-        Verify UI functionality from user perspective.
-
-        Args:
-            workspace: Project workspace path
-            issue: GitHub issue object
-            context: Project context
-            prompt_template: Coding standards template
-
-        Returns:
-            Tuple of (passed boolean, message string)
-        """
-        try:
-            # Get changed files focusing on UI components
-            result = subprocess.run(
-                ["git", "diff", "--name-only", "HEAD~1"],
-                cwd=workspace,
-                capture_output=True,
-                text=True
-            )
-            changed_files = [f for f in result.stdout.strip().split('\n')
-                           if any(x in f.lower() for x in ['component', 'page', 'view', 'ui', 'tsx', 'jsx', 'html', 'css'])][:5]
-
-            if not changed_files:
-                print("   ⚠️  No UI files detected")
-                return True, "No UI changes"
-
-            # Read UI files with aggressive truncation
-            file_contents = []
-            max_file_chars = 5000  # ~1.25k tokens per file (aggressive)
-            for file_path in changed_files[:3]:  # Only 3 UI files
-                full_path = workspace / file_path
-                if full_path.exists() and full_path.stat().st_size < 50000:
-                    try:
-                        with open(full_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-
-                        # Aggressive truncation
-                        if len(content) > max_file_chars:
-                            content = content[:max_file_chars] + f"\n...(truncated)"
-
-                        file_contents.append(f"## {file_path}\n```\n{content}\n```\n")
-                    except:
-                        pass
-
-            if not file_contents:
-                print("   ⚠️  No UI content to review")
-                return True, "No UI content"
-
-            ui_prompt = f"""Evaluate the UI implementation from a USER PERSPECTIVE.
-
-# PROJECT CONTEXT
-{context}
-
-# CODING STANDARDS
-{prompt_template}
-
-# ISSUE DESCRIPTION
-**{issue.title}**
-{issue.body or 'No description'}
-
-# UI FILES
-{''.join(file_contents)}
-
-As a user, evaluate:
-1. Will the UI elements render correctly?
-2. Are interactive elements (buttons, forms, inputs) functional?
-3. Does the UI match what was requested in the issue?
-4. Does the UI follow the project's design patterns and standards?
-5. Are there obvious UX problems (broken layouts, missing feedback, unclear labels)?
-6. Are loading states, error states, and edge cases handled?
-
-Respond with JSON:
-{{
-  "user_friendly": true/false,
-  "ui_issues": ["issue1", "issue2"],
-  "summary": "assessment from user perspective"
-}}
-"""
-
-            response = self.agent.send_message(ui_prompt)
-            review = self.agent.parse_json_response(response)
-
-            if not review:
-                print("   ⚠️  Could not parse UI review")
-                return True, "Could not parse review"
-
-            if review.get('user_friendly', True):
-                print(f"   ✅ UI looks good from user perspective")
-                if review.get('summary'):
-                    print(f"      {review['summary']}")
-                return True, "UI validation passed"
-            else:
-                issues_text = '\n      - '.join(review.get('ui_issues', []))
-                print(f"   ❌ UI issues from user perspective:")
-                print(f"      - {issues_text}")
-                return False, f"UI Issues:\n{issues_text}"
-
-        except Exception as e:
-            print(f"   ⚠️  Error during UI validation: {sanitize(str(e))}")
-            return True, f"Error: {sanitize(str(e))}"
 
     def _run_type_check(self, workspace: Path) -> tuple[bool, str]:
         """Run TypeScript type checking or equivalent."""
@@ -1129,7 +872,8 @@ Respond with JSON:
                             content = content[:max_file_chars] + f"\n...(truncated)"
 
                         file_contents.append(f"## {file_path}\n```\n{content}\n```\n")
-                    except:
+                    except (UnicodeDecodeError, IOError, OSError):
+                        # Skip files that can't be read (binary, permissions, etc.)
                         pass
 
             if not file_contents:
@@ -1179,7 +923,7 @@ Check for:
             print(f"     ⚠️  Error during quality review: {sanitize(str(e))}")
             return True, f"Error: {sanitize(str(e))}"
 
-    def list_projects(self):
+    def list_projects(self) -> None:
         """List all available projects."""
         projects = self.config_loader.list_projects()
         if not projects:

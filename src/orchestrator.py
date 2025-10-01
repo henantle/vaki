@@ -1,6 +1,7 @@
 """Main orchestrator for the agentic workflow."""
 
 import os
+from pathlib import Path
 from typing import Optional
 from github.Issue import Issue
 
@@ -12,13 +13,13 @@ from .workspace import WorkspaceManager
 class AgentOrchestrator:
     """Orchestrates the full workflow: fetch issues → implement → create PR."""
 
-    def __init__(self, github_token: str, base_dir: str = "."):
+    def __init__(self, github_token: str, base_dir: str = ".") -> None:
         self.github_token = github_token
         self.config_loader = ConfigLoader(base_dir)
         self.github_client = GitHubClient(github_token)
         self.workspace_manager = WorkspaceManager()
 
-    def run_project(self, project_name: str, issue_number: Optional[int] = None):
+    def run_project(self, project_name: str, issue_number: Optional[int] = None) -> None:
         """
         Run the workflow for a project.
 
@@ -57,7 +58,7 @@ class AgentOrchestrator:
         for issue in issues:
             self._process_issue(issue, config)
 
-    def _process_issue(self, issue: Issue, config: ProjectConfig):
+    def _process_issue(self, issue: Issue, config: ProjectConfig) -> None:
         """Process a single issue."""
         print(f"\n{'=' * 70}")
         print(f"🎯 PROCESSING ISSUE #{issue.number}")
@@ -154,13 +155,14 @@ class AgentOrchestrator:
             self.workspace_manager.return_to_base_branch(workspace, config.github.base_branch)
 
         except Exception as e:
-            print(f"\n❌ Error creating PR: {e}")
+            from .security import sanitize
+            print(f"\n❌ Error creating PR: {sanitize(str(e))}")
             print("\n💡 You can manually push and create PR:")
             print(f"  cd {workspace}")
             print(f"  git push origin {branch_name}")
             self.workspace_manager.return_to_base_branch(workspace, config.github.base_branch)
 
-    def _handle_interruption(self, workspace, config: ProjectConfig):
+    def _handle_interruption(self, workspace: Path, config: ProjectConfig) -> None:
         """Handle workflow interruption."""
         print("\n" + "=" * 70)
         print("What would you like to do?")
@@ -174,7 +176,7 @@ class AgentOrchestrator:
             print(f"\n📂 Workspace preserved: {workspace}")
             print("You can continue working later")
 
-    def list_projects(self):
+    def list_projects(self) -> None:
         """List all available projects."""
         projects = self.config_loader.list_projects()
         if not projects:
