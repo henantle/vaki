@@ -40,7 +40,7 @@ class ResourceManager:
 
     # Pricing (as of 2024 - update as needed)
     PRICING = {
-        "gpt-5.0": {
+        "gpt-5": {
             "input": 5.00 / 1_000_000,   # $5.00 per 1M input tokens (estimated)
             "output": 15.00 / 1_000_000,  # $15.00 per 1M output tokens (estimated)
         },
@@ -58,7 +58,7 @@ class ResourceManager:
         self,
         budget: BudgetConfig,
         storage_path: Optional[Path] = None,
-        model: str = "gpt-5.0"
+        model: str = "gpt-5"
     ):
         """
         Initialize resource manager.

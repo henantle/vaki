@@ -1,4 +1,4 @@
-# GPT-5.0 Pricing Information
+# GPT-5 Pricing Information
 
 **Status:** Estimated pricing based on expected progression from GPT-4o
 
@@ -6,12 +6,14 @@
 
 ## Current Pricing Configuration
 
-VÄKI is now configured to use **GPT-5.0** as the default model for all OpenAI operations.
+VÄKI is now configured to use **GPT-5** as the default model for all OpenAI operations.
+
+**Note:** GPT-5 uses the new Responses API (`client.responses.create()`) instead of the Chat Completions API.
 
 ### Estimated Pricing
 
 ```python
-"gpt-5.0": {
+"gpt-5": {
     "input": $5.00 per 1M tokens   # Estimated
     "output": $15.00 per 1M tokens # Estimated
 }
@@ -21,7 +23,7 @@ VÄKI is now configured to use **GPT-5.0** as the default model for all OpenAI o
 
 | Model | Input (per 1M tokens) | Output (per 1M tokens) |
 |-------|----------------------|------------------------|
-| GPT-5.0 | $5.00 (estimated) | $15.00 (estimated) |
+| GPT-5 | $5.00 (estimated) | $15.00 (estimated) |
 | GPT-4o | $2.50 | $10.00 |
 | GPT-4o-mini | $0.15 | $0.60 |
 
@@ -31,12 +33,12 @@ VÄKI is now configured to use **GPT-5.0** as the default model for all OpenAI o
 
 ### 1. Pricing May Change
 
-The pricing shown above for GPT-5.0 is **estimated** based on:
+The pricing shown above for GPT-5 is **estimated** based on:
 - Historical pricing progression from GPT-4 to GPT-4o
 - Typical model improvement cost increases
 - Conservative estimation for budget safety
 
-**When official GPT-5.0 pricing is announced:**
+**When official GPT-5 pricing is announced:**
 - Update pricing in `src/resource_manager.py`
 - Update this document
 - Adjust project budgets if needed
@@ -44,15 +46,15 @@ The pricing shown above for GPT-5.0 is **estimated** based on:
 ### 2. Model Availability
 
 **Check model availability:**
-- Ensure your OpenAI API key has access to GPT-5.0
-- If GPT-5.0 is not available, you may need to:
+- Ensure your OpenAI API key has access to GPT-5
+- If GPT-5 is not available, you may need to:
   - Wait for general availability
   - Request beta access
   - Or temporarily revert to GPT-4o
 
 ### 3. Budget Considerations
 
-With estimated GPT-5.0 pricing ($5/$15), typical costs:
+With estimated GPT-5 pricing ($5/$15), typical costs:
 
 **Per implementation:**
 - Small fix: ~50K tokens = $0.50 - $1.50
@@ -76,7 +78,7 @@ When official pricing is announced, update in one place:
 
 ```python
 PRICING = {
-    "gpt-5.0": {
+    "gpt-5": {
         "input": X.XX / 1_000_000,   # Update with official price
         "output": Y.YY / 1_000_000,  # Update with official price
     },
@@ -165,7 +167,8 @@ A: Based on estimates: 2x input cost, 1.5x output cost compared to GPT-4o.
 
 ## Summary
 
-✅ **Default model changed to GPT-5.0**
+✅ **Default model changed to GPT-5**
+✅ **Uses new Responses API** - automatically handled
 ⚠️ **Pricing is estimated** - update when official pricing announced
 💡 **Monitor costs closely** with the higher pricing tier
 🔄 **Easy to revert** to GPT-4o if needed
@@ -173,4 +176,4 @@ A: Based on estimates: 2x input cost, 1.5x output cost compared to GPT-4o.
 ---
 
 *Last updated: 2025-10-03*
-*Update this document when official GPT-5.0 pricing is announced*
+*Update this document when official GPT-5 pricing is announced*

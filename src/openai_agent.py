@@ -9,18 +9,23 @@ from openai import OpenAI
 class OpenAIAgent:
     """Agent that uses OpenAI API to implement code changes."""
 
-    def __init__(self, api_key: str, model: str = "gpt-5.0"):
+    def __init__(self, api_key: str, model: str = "gpt-5"):
         """
         Initialize OpenAI agent.
 
         Args:
             api_key: OpenAI API key
-            model: Model to use (default: gpt-5.0)
+            model: Model to use (default: gpt-5)
+                   Supports: gpt-5, gpt-4o, gpt-4o-mini
         """
         self.client = OpenAI(api_key=api_key)
         self.model = model
         self.conversation_history: List[Dict[str, Any]] = []
         self.system_prompt: Optional[str] = None
+
+    def _is_gpt5(self) -> bool:
+        """Check if using GPT-5 model."""
+        return self.model.startswith("gpt-5")
 
     def initialize_with_project_context(
         self,
@@ -134,15 +139,11 @@ Start by responding with your implementation plan as a JSON object:
             "content": message
         })
 
-        # Get response from OpenAI
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=self.conversation_history,
-            temperature=0.7,
-            max_tokens=4096
-        )
-
-        assistant_message = response.choices[0].message.content
+        # Get response based on model type
+        if self._is_gpt5():
+            assistant_message = self._send_gpt5()
+        else:
+            assistant_message = self._send_chat_completion()
 
         # Validate assistant response
         if assistant_message is None:
@@ -156,6 +157,46 @@ Start by responding with your implementation plan as a JSON object:
         })
 
         return assistant_message
+
+    def _send_chat_completion(self) -> str:
+        """Send message using Chat Completions API (GPT-4, GPT-4o, etc.)."""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=self.conversation_history,
+            temperature=0.7,
+            max_tokens=4096
+        )
+        return response.choices[0].message.content
+
+    def _send_gpt5(self) -> str:
+        """Send message using Responses API (GPT-5)."""
+        # Convert conversation history to single input string
+        input_text = self._format_conversation_for_gpt5()
+
+        response = self.client.responses.create(
+            model=self.model,
+            input=input_text,
+            reasoning={"effort": "medium"},
+            text={"verbosity": "medium"}
+        )
+        return response.output_text
+
+    def _format_conversation_for_gpt5(self) -> str:
+        """Format conversation history as a single input string for GPT-5."""
+        formatted = []
+
+        for msg in self.conversation_history:
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+
+            if role == "system":
+                formatted.append(f"=== SYSTEM INSTRUCTIONS ===\n{content}\n")
+            elif role == "user":
+                formatted.append(f"=== USER MESSAGE ===\n{content}\n")
+            elif role == "assistant":
+                formatted.append(f"=== ASSISTANT RESPONSE ===\n{content}\n")
+
+        return "\n".join(formatted)
 
     def parse_json_response(self, response: str) -> Any:
         """
