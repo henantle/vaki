@@ -1,0 +1,14 @@
+Add dark mode toggle to settings page
+
+Users have requested a dark mode option. The toggle should be in the settings page and persist across sessions.
+
+Requirements:
+- Add toggle switch in Settings
+- Save preference to localStorage
+- Apply dark theme styles when enabled
+- Default to system preference on first visit
+
+Acceptance Criteria:
+- Toggle switches between light and dark mode
+- Preference persists on page reload
+- Works on all pages of the app

@@ -38,6 +38,25 @@ python main.py run myproject 42
 
 **Best for:** Complex features, architectural decisions
 
+### Manual Ticket Mode (New! 🎉)
+**Process tickets from ANY source** - Slack, email, Jira, Linear, etc.
+```bash
+# Interactive (paste text)
+python main.py ticket myproject --source=slack
+
+# From file
+python main.py ticket myproject --file=ticket.txt --source=jira
+
+# From stdin
+echo "Fix bug\nDescription here" | python main.py ticket myproject
+```
+1. Paste or pipe ticket text from any source
+2. VÄKI parses and processes like a GitHub issue
+3. Creates PR with full context and source reference
+
+**Best for:** Ad-hoc requests, multi-tool workflows, non-GitHub sources
+**See:** [MANUAL_TICKETS.md](MANUAL_TICKETS.md) for complete guide
+
 ### OpenAI Mode (Enhanced)
 **Fully automated** - Zero human intervention with enterprise features
 ```bash

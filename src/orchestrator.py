@@ -58,6 +58,25 @@ class AgentOrchestrator:
         for issue in issues:
             self._process_issue(issue, config)
 
+    def run_manual_ticket(self, project_name: str, manual_ticket) -> None:
+        """
+        Process a manual ticket with Claude Code (semi-automated).
+
+        Args:
+            project_name: Name of the project (YAML config name)
+            manual_ticket: ManualTicket object with ticket details
+
+        Note:
+            Manual tickets work best with --mode=openai for fully automated processing.
+        """
+        print("\n⚠️  Manual tickets in Claude mode require human interaction.")
+        print("💡 Consider using: python main.py ticket <project> --mode=openai")
+        print("\nProcessing with Claude Code CLI...\n")
+
+        # Process as regular issue
+        config = self.config_loader.load_project(project_name)
+        self._process_issue(manual_ticket, config)
+
     def _process_issue(self, issue: Issue, config: ProjectConfig) -> None:
         """Process a single issue."""
         print(f"\n{'=' * 70}")

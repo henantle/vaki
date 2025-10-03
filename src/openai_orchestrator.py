@@ -133,13 +133,49 @@ class OpenAIOrchestrator:
         for issue in issues:
             self._process_issue(issue, config)
 
-    def _process_issue(self, issue: Issue, config: ProjectConfig) -> None:
-        """Process a single issue with enhanced workflow."""
+    def run_manual_ticket(self, project_name: str, manual_ticket) -> None:
+        """
+        Process a manual ticket from external sources (Slack, email, Jira, etc.).
+
+        Args:
+            project_name: Name of the project (YAML config name)
+            manual_ticket: ManualTicket object with ticket details
+        """
+        # Load project configuration
+        config = self.config_loader.load_project(project_name)
         print(f"\n{'=' * 70}")
-        print(f"🤖 AUTO-PROCESSING ISSUE #{issue.number}")
+        print(f"📦 PROJECT: {config.name} (OpenAI Automated Mode)")
+        print(f"📝 {config.description}")
+        print(f"{'=' * 70}\n")
+
+        print(f"📋 Processing manual ticket:")
+        print(f"   Source: {manual_ticket.source}")
+        print(f"   #{manual_ticket.number}: {manual_ticket.title}\n")
+
+        # Process the manual ticket
+        self._process_issue(manual_ticket, config, is_manual=True)
+
+    def _process_issue(self, issue, config: ProjectConfig, is_manual: bool = False) -> None:
+        """
+        Process a single issue with enhanced workflow.
+
+        Args:
+            issue: GitHub Issue or ManualTicket object
+            config: Project configuration
+            is_manual: True if processing a manual ticket
+        """
+        print(f"\n{'=' * 70}")
+        if is_manual:
+            print(f"🤖 AUTO-PROCESSING MANUAL TICKET #{issue.number}")
+        else:
+            print(f"🤖 AUTO-PROCESSING ISSUE #{issue.number}")
         print(f"{'=' * 70}")
         print(f"Title: {issue.title}")
-        print(f"URL: {issue.html_url}\n")
+        if not is_manual:
+            print(f"URL: {issue.html_url}")
+        else:
+            print(f"Source: {issue.source}")
+        print()
 
         # Initialize implementation logger
         logger = ImplementationLogger(config.name, issue.number)
@@ -225,7 +261,10 @@ class OpenAIOrchestrator:
         logger.log_phase("codebase_analysis", "end")
 
         # Create branch name
-        branch_name = f"openai/issue-{issue.number}"
+        if is_manual:
+            branch_name = f"openai/manual-{issue.number}"
+        else:
+            branch_name = f"openai/issue-{issue.number}"
 
         # Prepare workspace
         success = self.workspace_manager.prepare_workspace(
@@ -546,7 +585,25 @@ Respond NOW with ONLY a JSON array:"""
             self.workspace_manager.push_changes(workspace, branch_name)
 
             # Create PR body
-            pr_body = f"""🤖 Automated implementation by VÄKI AI
+            if is_manual:
+                # Manual ticket - include source information
+                pr_body = f"""🤖 Automated implementation by VÄKI AI
+
+**Strategy Used:** {final_strategy_used or 'Standard Implementation'}
+**Quality Status:** {'✅ All checks passed' if verification_passed else '⚠️ See quality notes below'}
+**Files Changed:** {files_changed}
+**Implementation Time:** {duration/60:.1f}m
+
+---
+
+{issue.to_pr_reference()}
+
+**Description:**
+{issue.body or 'No description provided'}
+"""
+            else:
+                # GitHub issue - standard format
+                pr_body = f"""🤖 Automated implementation by VÄKI AI
 
 **Strategy Used:** {final_strategy_used or 'Standard Implementation'}
 **Quality Status:** {'✅ All checks passed' if verification_passed else '⚠️ See quality notes below'}
@@ -567,9 +624,15 @@ Closes #{issue.number}
                 usage = self.resource_manager.get_issue_usage()
                 pr_body += f"\n\n---\n*Cost: ${usage.cost:.2f} | Tokens: {usage.tokens:,}*"
 
+            # Create PR with appropriate title
+            if is_manual:
+                pr_title = f"[VÄKI] {issue.title} (from {issue.source})"
+            else:
+                pr_title = f"[VÄKI] {issue.title}"
+
             pr = self.github_client.create_pull_request(
                 repo_name=config.github.repo,
-                title=f"[VÄKI] {issue.title}",
+                title=pr_title,
                 body=pr_body,
                 head=branch_name,
                 base=config.github.base_branch
