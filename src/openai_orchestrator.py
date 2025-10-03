@@ -149,12 +149,16 @@ class OpenAIOrchestrator:
         context = self.config_loader.load_context(config.context)
         prompt_template = self.config_loader.load_prompt_template(config.prompt_template)
 
-        # Create implementation prompt
+        # Initialize agent with project context (once per issue)
+        self.agent.initialize_with_project_context(
+            project_context=context,
+            coding_standards=prompt_template
+        )
+
+        # Create task-focused implementation prompt
         initial_prompt = self.agent.create_implementation_prompt(
             issue_title=issue.title,
-            issue_body=issue.body or "",
-            project_context=context,
-            prompt_template=prompt_template
+            issue_body=issue.body or ""
         )
 
         try:
@@ -172,39 +176,21 @@ class OpenAIOrchestrator:
                     print("=" * 70)
                     print(f"Agent will read codebase and implement changes...")
                     print()
-                    self._agent_loop(workspace, initial_prompt)
+                    self._agent_loop(workspace, initial_prompt, context, prompt_template)
                 else:
                     print("🔄 PHASE 6: RETRY WITH FEEDBACK")
                     print("=" * 70)
                     print("Sending verification feedback to agent for corrections...\n")
 
-                    # Send feedback to agent for retry and continue loop
-                    # Re-include full context to prevent drift
+                    # Send feedback to agent for retry
+                    # Context is already in system message, just provide the task
                     retry_prompt = f"""The implementation has verification issues that need to be fixed.
-
-# PROJECT CONTEXT
-{context}
-
-# CODING STANDARDS
-{prompt_template}
-
-# ISSUE
-**Title**: {issue.title}
-**Description**: {issue.body or 'No description'}
 
 # VERIFICATION FEEDBACK - ISSUES TO FIX
 {verification_feedback}
 
 # YOUR TASK
 Fix these specific issues. Respond with a JSON array of actions.
-
-IMPORTANT: Use ONLY these action types:
-- {{"action": "read_file", "path": "path/to/file"}}
-- {{"action": "write_file", "path": "path/to/file", "content": "full content"}}
-- {{"action": "edit_file", "path": "path/to/file", "search": "old text", "replace": "new text"}}
-- {{"action": "run_command", "command": "npm test"}}
-- {{"action": "commit", "message": "Fixed verification issues"}}
-- {{"action": "done", "summary": "what was fixed"}}
 
 Example response:
 [
@@ -217,7 +203,7 @@ Example response:
 Respond NOW with ONLY a JSON array:"""
 
                     # Continue the agent loop with retry feedback
-                    self._agent_loop(workspace, retry_prompt)
+                    self._agent_loop(workspace, retry_prompt, context, prompt_template)
 
                 # Check if commits were made
                 if not self.workspace_manager.has_commits(workspace, config.github.base_branch):
@@ -227,9 +213,14 @@ Respond NOW with ONLY a JSON array:"""
 
                 print("\n✅ Implementation phase complete")
 
-                # Reset conversation for verification (fresh context, saves tokens)
+                # Reset conversation for verification (fresh perspective)
+                # Re-initialize with project context
                 print("\n   🔄 Resetting conversation for verification (fresh perspective)")
                 self.agent.reset_conversation()
+                self.agent.initialize_with_project_context(
+                    project_context=context,
+                    coding_standards=prompt_template
+                )
 
                 # PHASE 2: Single Combined Verification
                 print("\n" + "=" * 70)
@@ -286,13 +277,25 @@ Respond NOW with ONLY a JSON array:"""
             print(f"  git checkout {branch_name}")
             self.workspace_manager.return_to_base_branch(workspace, config.github.base_branch)
 
-    def _agent_loop(self, workspace: Path, initial_prompt: str) -> None:
+    def _agent_loop(
+        self,
+        workspace: Path,
+        initial_prompt: str,
+        context: str,
+        prompt_template: str
+    ) -> None:
         """
         Run the agent loop to implement changes.
 
         Args:
             workspace: Project workspace path
             initial_prompt: Initial prompt to send to agent
+            context: Project context (kept for re-initialization if needed)
+            prompt_template: Coding standards template (kept for re-initialization if needed)
+
+        Note:
+            Agent should already be initialized with project context via
+            initialize_with_project_context() before calling this method.
         """
         iteration = 0
         response = self.agent.send_message(initial_prompt)
@@ -649,13 +652,8 @@ Respond with JSON array of actions:"""
         diff_content = sanitize(diff_result.stdout[:6000])  # ~1.5k tokens
 
         # SINGLE combined verification prompt
+        # Context is already in system message
         combined_prompt = f"""Review this implementation against ALL quality criteria in ONE analysis.
-
-# PROJECT CONTEXT
-{context}
-
-# CODING STANDARDS
-{prompt_template}
 
 # ORIGINAL ISSUE
 **Title**: {issue.title}
@@ -672,7 +670,7 @@ Respond with JSON array of actions:"""
 # YOUR TASK
 Analyze and respond with JSON covering ALL these areas:
 
-1. **Code Quality**: Does code follow project standards?
+1. **Code Quality**: Does code follow project standards you were given?
 2. **Requirements**: Does it address all issue requirements?
 3. **UI/UX**: If UI changes, will it work from user perspective?
 4. **Concerns**: Any bugs, missing features, or quality issues?
@@ -880,13 +878,8 @@ Respond with JSON:
                 print("     ⚠️  No files to review")
                 return True, "No files to review"
 
-            review_prompt = f"""Review this code implementation against the project guidelines:
-
-# PROJECT CONTEXT
-{context}
-
-# CODING STANDARDS
-{prompt_template}
+            # Context is already in system message
+            review_prompt = f"""Review this code implementation against the project guidelines.
 
 # CHANGED FILES
 {''.join(file_contents)}
@@ -895,7 +888,7 @@ Respond with JSON:
 {{"passed": true/false, "issues": ["issue1", "issue2"], "summary": "overall assessment"}}
 
 Check for:
-- Adherence to coding standards
+- Adherence to coding standards you were given
 - Code quality and best practices
 - Potential bugs or issues
 - Test coverage

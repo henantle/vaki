@@ -20,50 +20,40 @@ class OpenAIAgent:
         self.client = OpenAI(api_key=api_key)
         self.model = model
         self.conversation_history: List[Dict[str, Any]] = []
+        self.system_prompt: Optional[str] = None
 
-    def create_implementation_prompt(
+    def initialize_with_project_context(
         self,
-        issue_title: str,
-        issue_body: str,
         project_context: str,
-        prompt_template: str
-    ) -> str:
+        coding_standards: str
+    ) -> None:
         """
-        Create initial prompt for implementation.
+        Initialize agent with project-specific system context.
+        This sets up the agent's "memory" with project rules and standards.
 
         Args:
-            issue_title: Issue title
-            issue_body: Issue description
-            project_context: Project context and guidelines
-            prompt_template: Prompt template with coding standards
+            project_context: Project-specific context and guidelines
+            coding_standards: Coding standards and best practices
 
-        Returns:
-            Formatted prompt
+        Note:
+            This should be called once per issue/conversation before sending
+            task-specific messages. The context will persist through the conversation.
         """
-        prompt = f"""You are an expert software engineer tasked with implementing a GitHub issue.
+        self.system_prompt = f"""You are an expert software engineer tasked with implementing GitHub issues.
 
 # PROJECT CONTEXT
 {project_context}
 
 # CODING STANDARDS
-{prompt_template}
+{coding_standards}
 
-# ISSUE TO IMPLEMENT
-**Title**: {issue_title}
+# HOW YOU WORK
+You work iteratively using actions. Always respond with valid JSON:
 
-**Description**:
-{issue_body or 'No description provided'}
-
-# YOUR TASK
-Implement this issue following the project context and coding standards above.
-
-You will work iteratively:
-1. First, respond with your implementation plan as a JSON object with this structure:
+1. First, respond with your implementation plan:
    {{"plan": "Step-by-step plan", "files_to_read": ["file1.py", "file2.ts"]}}
 
-2. I will provide you with the file contents you requested.
-
-3. Then respond with actions to take as a JSON array:
+2. Then respond with actions to take as a JSON array:
    [
      {{"action": "read_file", "path": "path/to/file"}},
      {{"action": "write_file", "path": "path/to/file", "content": "full file content"}},
@@ -73,28 +63,63 @@ You will work iteratively:
      {{"action": "done", "summary": "what was implemented"}}
    ]
 
-4. I will execute those actions and give you results.
-
-5. Continue until you use the "done" action.
-
 IMPORTANT RULES:
 - Always provide valid JSON responses
 - Read files before editing them
 - Make atomic, focused commits
 - Test your changes when possible
 - Use "done" action when implementation is complete
+- Follow the project context and coding standards above
+"""
 
-Start by responding with your implementation plan.
+        # Initialize conversation with system prompt
+        self.conversation_history = [{
+            "role": "system",
+            "content": self.system_prompt
+        }]
+
+    def create_implementation_prompt(
+        self,
+        issue_title: str,
+        issue_body: str
+    ) -> str:
+        """
+        Create initial task-focused prompt for implementation.
+
+        Note: Project context and coding standards should already be set
+        via initialize_with_project_context() before calling this.
+
+        Args:
+            issue_title: Issue title
+            issue_body: Issue description
+
+        Returns:
+            Formatted task prompt
+        """
+        prompt = f"""# ISSUE TO IMPLEMENT
+
+**Title**: {issue_title}
+
+**Description**:
+{issue_body or 'No description provided'}
+
+# YOUR TASK
+Implement this issue following the project context and coding standards you have.
+
+Start by responding with your implementation plan as a JSON object:
+{{"plan": "Step-by-step plan", "files_to_read": ["file1.py", "file2.ts"]}}
 """
         return prompt
 
-    def send_message(self, message: str, system_prompt: Optional[str] = None) -> str:
+    def send_message(self, message: str) -> str:
         """
         Send message to OpenAI and get response.
 
+        Note: Make sure to call initialize_with_project_context() before
+        sending messages to set up the system context.
+
         Args:
             message: User message
-            system_prompt: Optional system prompt for first message
 
         Returns:
             Assistant response
@@ -102,13 +127,6 @@ Start by responding with your implementation plan.
         # Validate message is not None or empty
         if not message:
             raise ValueError("Message cannot be None or empty")
-
-        # Initialize conversation with system prompt if provided
-        if system_prompt and not self.conversation_history:
-            self.conversation_history.append({
-                "role": "system",
-                "content": system_prompt
-            })
 
         # Add user message
         self.conversation_history.append({
@@ -169,14 +187,26 @@ Start by responding with your implementation plan.
             print(f"Response: {response[:200]}...")
             return None
 
-    def reset_conversation(self):
-        """Reset conversation history."""
-        self.conversation_history = []
+    def reset_conversation(self) -> None:
+        """
+        Reset conversation history.
 
-    def prune_conversation(self, keep_recent: int = 5):
+        Note: This preserves the system prompt if it was set via
+        initialize_with_project_context().
+        """
+        if self.system_prompt:
+            # Preserve system prompt when resetting
+            self.conversation_history = [{
+                "role": "system",
+                "content": self.system_prompt
+            }]
+        else:
+            self.conversation_history = []
+
+    def prune_conversation(self, keep_recent: int = 5) -> None:
         """
         Prune conversation history to prevent token limit issues.
-        Keeps system message and recent N message pairs.
+        Keeps system message (with project context) and recent N message pairs.
 
         Args:
             keep_recent: Number of recent message pairs to keep
@@ -184,13 +214,13 @@ Start by responding with your implementation plan.
         if len(self.conversation_history) <= keep_recent * 2 + 1:
             return  # No need to prune
 
-        # Keep system message (if exists)
+        # Always keep system message (contains project context)
         system_messages = [msg for msg in self.conversation_history if msg.get("role") == "system"]
 
         # Keep recent messages (user/assistant pairs)
         recent_messages = self.conversation_history[-(keep_recent * 2):]
 
-        # Rebuild conversation
+        # Rebuild conversation: system + recent messages
         self.conversation_history = system_messages + recent_messages
         print(f"   🔄 Pruned conversation history (kept {len(recent_messages)} recent messages)")
 
