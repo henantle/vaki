@@ -12,6 +12,17 @@ from .workspace import WorkspaceManager
 from .openai_agent import OpenAIAgent
 from .security import sanitize
 
+# Import new enhancement modules
+from .ticket_analyzer import TicketAnalyzer
+from .quality_gates import QualityGate
+from .codebase_analyzer import CodebaseAnalyzer
+from .resource_manager import ResourceManager, BudgetConfig
+from .checkpoint_manager import CheckpointManager
+from .implementation_tracker import ImplementationTracker, ImplementationOutcome
+from .strategy_evaluator import StrategyEvaluator
+from .incremental_validator import IncrementalValidator
+from .implementation_logger import ImplementationLogger
+
 
 # Action type definitions
 class ReadFileAction(TypedDict):
@@ -75,6 +86,14 @@ class OpenAIOrchestrator:
         self.agent = OpenAIAgent(openai_api_key)
         self.max_iterations = 20  # Safety limit
 
+        # Initialize enhancement modules
+        self.ticket_analyzer = TicketAnalyzer(self.agent, self.github_client)
+        self.strategy_evaluator = StrategyEvaluator(self.agent)
+        self.tracker = ImplementationTracker()
+
+        # Resource manager will be initialized with config-specific budget
+        self.resource_manager: Optional[ResourceManager] = None
+
     def run_project(self, project_name: str, issue_number: Optional[int] = None) -> None:
         """
         Run the automated workflow for a project.
@@ -115,20 +134,95 @@ class OpenAIOrchestrator:
             self._process_issue(issue, config)
 
     def _process_issue(self, issue: Issue, config: ProjectConfig) -> None:
-        """Process a single issue with OpenAI agent."""
+        """Process a single issue with enhanced workflow."""
         print(f"\n{'=' * 70}")
         print(f"🤖 AUTO-PROCESSING ISSUE #{issue.number}")
         print(f"{'=' * 70}")
         print(f"Title: {issue.title}")
         print(f"URL: {issue.html_url}\n")
 
+        # Initialize implementation logger
+        logger = ImplementationLogger(config.name, issue.number)
+        logger.log_phase("initialization", "start")
+
+        # Initialize resource manager with project-specific budget
+        if config.resources:
+            budget = BudgetConfig(
+                daily_cost_limit=config.resources.daily_cost_limit,
+                per_issue_cost_limit=config.resources.per_issue_cost_limit,
+                per_issue_token_limit=config.resources.per_issue_token_limit
+            )
+            self.resource_manager = ResourceManager(budget, model="gpt-4o")
+            self.resource_manager.start_issue_tracking()
+            logger.log_info("Resource tracking enabled", {
+                "daily_limit": budget.daily_cost_limit,
+                "per_issue_limit": budget.per_issue_cost_limit
+            })
+
         # Find project directory
         workspace = self.workspace_manager.find_project_directory(config.github.repo)
 
         if not workspace:
+            logger.log_error("Project directory not found")
             print(f"❌ Error: Project directory not found in parent folder")
             print(f"Expected to find: {config.github.repo.split('/')[-1]}")
             return
+
+        # Load context and templates
+        context = self.config_loader.load_context(config.context)
+        prompt_template = self.config_loader.load_prompt_template(config.prompt_template)
+
+        # PHASE 0: Ticket Analysis
+        if config.ticket_analysis and config.ticket_analysis.enabled:
+            print("\n" + "=" * 70)
+            print("📋 PHASE 0: TICKET ANALYSIS")
+            print("=" * 70)
+            logger.log_phase("ticket_analysis", "start")
+
+            analysis = self.ticket_analyzer.analyze_ticket(issue, context)
+            self.ticket_analyzer.print_analysis_summary(analysis)
+            logger.log_info("Ticket analyzed", {
+                "clarity_score": analysis.clarity_score,
+                "complexity": analysis.estimated_complexity
+            })
+
+            if analysis.clarity_score < config.ticket_analysis.min_clarity_score:
+                print(f"\n⚠️  Ticket clarity score ({analysis.clarity_score}) below threshold ({config.ticket_analysis.min_clarity_score})")
+
+                if config.ticket_analysis.ask_for_clarification:
+                    self.ticket_analyzer.request_clarification(issue, analysis)
+                    logger.log_warning("Requested clarification from issue author")
+                    print("✅ Posted clarification questions to GitHub issue")
+                    return
+                else:
+                    print("⚠️  Proceeding despite low clarity (ask_for_clarification disabled)")
+
+            logger.log_phase("ticket_analysis", "end")
+        else:
+            # Simple analysis for complexity estimation
+            analysis = self.ticket_analyzer.analyze_ticket(issue, context)
+
+        # Resource budget check
+        if self.resource_manager:
+            estimate = self.resource_manager.get_cost_estimate(len(context), analysis.estimated_complexity)
+            print(f"\n💰 Cost Estimate: ${estimate.cost:.2f} ({estimate.tokens:,} tokens)")
+
+            if not self.resource_manager.check_quota("implement", estimate.tokens):
+                logger.log_error("Budget exceeded", {"estimate": estimate.cost})
+                print("❌ Implementation would exceed budget limits")
+                return
+
+        # Codebase Analysis
+        print("\n" + "=" * 70)
+        print("🔍 CODEBASE ANALYSIS")
+        print("=" * 70)
+        logger.log_phase("codebase_analysis", "start")
+
+        codebase_analyzer = CodebaseAnalyzer(workspace)
+        architecture = codebase_analyzer.get_architecture_summary()
+        print(architecture)
+        logger.log_info("Codebase analyzed")
+        logger.log_phase("codebase_analysis", "end")
 
         # Create branch name
         branch_name = f"openai/issue-{issue.number}"
@@ -142,18 +236,78 @@ class OpenAIOrchestrator:
         )
 
         if not success:
+            logger.log_error("Failed to prepare workspace")
             print("❌ Failed to prepare workspace")
             return
 
-        # Load context and templates
-        context = self.config_loader.load_context(config.context)
-        prompt_template = self.config_loader.load_prompt_template(config.prompt_template)
-
-        # Initialize agent with project context (once per issue)
+        # Initialize agent with enhanced project context
+        enhanced_context = f"{context}\n\n{architecture}"
         self.agent.initialize_with_project_context(
-            project_context=context,
+            project_context=enhanced_context,
             coding_standards=prompt_template
         )
+
+        # Strategy Generation (if enabled)
+        strategies = []
+        if config.implementation and config.implementation.multi_strategy:
+            print("\n" + "=" * 70)
+            print("🎯 STRATEGY GENERATION")
+            print("=" * 70)
+            logger.log_phase("strategy_generation", "start")
+
+            strategies = self.strategy_evaluator.generate_strategies(issue, enhanced_context, analysis)
+            self.strategy_evaluator.print_strategies(strategies)
+
+            # Rank strategies
+            ranked_strategies = self.strategy_evaluator.rank_strategies(strategies, criteria={
+                "safety": 0.4,
+                "quality": 0.3,
+                "speed": 0.2,
+                "simplicity": 0.1
+            })
+            print(f"\n✅ Generated {len(ranked_strategies)} strategies (ranked by criteria)")
+            logger.log_info("Strategies generated", {"count": len(strategies)})
+            logger.log_phase("strategy_generation", "end")
+        else:
+            # Create default strategy
+            from .strategy_evaluator import ImplementationStrategy
+            ranked_strategies = [ImplementationStrategy(
+                name="Standard Implementation",
+                approach="Direct implementation following project standards",
+                pros=["Straightforward", "Well-tested approach"],
+                cons=["May not explore alternatives"],
+                estimated_complexity=analysis.estimated_complexity,
+                risk_level="medium",
+                estimated_time="15-30 minutes"
+            )]
+
+        # Initialize quality gate
+        quality_gate = None
+        if config.quality:
+            quality_gate = QualityGate(workspace, config.quality)
+            logger.log_info("Quality gates configured", {"mode": config.quality.mode})
+
+        # Initialize checkpoint manager
+        checkpoint_mgr = None
+        if config.implementation and config.implementation.use_checkpoints:
+            checkpoint_mgr = CheckpointManager(workspace)
+            logger.log_info("Checkpoint management enabled")
+
+        # Initialize incremental validator
+        incremental_validator = None
+        if config.implementation and config.implementation.incremental_validation:
+            incremental_validator = IncrementalValidator(workspace)
+            logger.log_info("Incremental validation enabled")
+
+        # Get insights from past implementations
+        insights = self.tracker.get_insights(config.name)
+        if insights.total_attempts > 0:
+            print(f"\n📊 Historical Insights: {insights.success_rate:.1%} success rate over {insights.total_attempts} attempts")
+            suggestions = self.tracker.suggest_improvements(config.name, [label.name for label in issue.labels])
+            if suggestions:
+                print("💡 Suggestions based on history:")
+                for suggestion in suggestions[:3]:
+                    print(f"   • {suggestion}")
 
         # Create task-focused implementation prompt
         initial_prompt = self.agent.create_implementation_prompt(
@@ -161,111 +315,275 @@ class OpenAIOrchestrator:
             issue_body=issue.body or ""
         )
 
+        implementation_start_time = __import__('datetime').datetime.now()
+
         try:
-            # Implementation and verification loop (max 3 attempts)
-            max_attempts = 3
-            for attempt in range(1, max_attempts + 1):
+            # Try strategies with checkpoints and rollback capability
+            strategy_success = False
+            final_strategy_used = None
+            verification_passed = False
+            verification_feedback = ""
+
+            for strategy_idx, strategy in enumerate(ranked_strategies, 1):
                 print("\n" + "=" * 70)
-                print(f"🔄 ATTEMPT {attempt}/{max_attempts}")
+                print(f"🎯 STRATEGY {strategy_idx}/{len(ranked_strategies)}: {strategy.name}")
                 print("=" * 70)
+                print(f"Approach: {strategy.approach}")
+                print(f"Risk: {strategy.risk_level} | Complexity: {strategy.estimated_complexity}/10")
+                logger.log_phase(f"strategy_{strategy_idx}", "start", {"name": strategy.name})
 
-                # PHASE 1: Implementation
-                print("\n" + "=" * 70)
-                if attempt == 1:
-                    print("⚙️  PHASE 1: IMPLEMENTATION")
-                    print("=" * 70)
-                    print(f"Agent will read codebase and implement changes...")
-                    print()
-                    self._agent_loop(workspace, initial_prompt, context, prompt_template)
-                else:
-                    print("🔄 PHASE 6: RETRY WITH FEEDBACK")
-                    print("=" * 70)
-                    print("Sending verification feedback to agent for corrections...\n")
+                # Create checkpoint before trying strategy
+                if checkpoint_mgr:
+                    checkpoint = checkpoint_mgr.create_checkpoint(
+                        name=f"before_strategy_{strategy_idx}",
+                        description=f"Before attempting: {strategy.name}",
+                        quality_score=0.0
+                    )
+                    if checkpoint:
+                        print(f"📍 Checkpoint created: {checkpoint.commit_hash[:8]}")
 
-                    # Send feedback to agent for retry
-                    # Context is already in system message, just provide the task
-                    retry_prompt = f"""The implementation has verification issues that need to be fixed.
+                # Implementation attempts (up to 3 per strategy)
+                max_attempts = 3
+                for attempt in range(1, max_attempts + 1):
+                    print("\n" + f"{'─' * 70}")
+                    print(f"🔄 ATTEMPT {attempt}/{max_attempts} for {strategy.name}")
+                    print(f"{'─' * 70}")
 
-# VERIFICATION FEEDBACK - ISSUES TO FIX
+                    # PHASE 1: Implementation
+                    print("\n⚙️  PHASE 1: IMPLEMENTATION")
+                    logger.log_phase("implementation", "start")
+
+                    if attempt == 1:
+                        # First attempt: use initial prompt
+                        strategy_prompt = f"{initial_prompt}\n\n## STRATEGY TO USE\n{strategy.approach}"
+                        self._agent_loop(workspace, strategy_prompt, enhanced_context, prompt_template, incremental_validator, logger)
+                    else:
+                        # Retry with feedback
+                        print("Sending verification feedback for corrections...\n")
+                        retry_prompt = f"""The implementation has verification issues that need to be fixed.
+
+# VERIFICATION FEEDBACK
 {verification_feedback}
 
 # YOUR TASK
 Fix these specific issues. Respond with a JSON array of actions.
 
-Example response:
-[
-  {{"action": "read_file", "path": "src/App.tsx"}},
-  {{"action": "edit_file", "path": "src/App.tsx", "search": "old code", "replace": "fixed code"}},
-  {{"action": "commit", "message": "Fix: applied verification feedback"}},
-  {{"action": "done", "summary": "Fixed all verification issues"}}
-]
-
 Respond NOW with ONLY a JSON array:"""
+                        self._agent_loop(workspace, retry_prompt, enhanced_context, prompt_template, incremental_validator, logger)
 
-                    # Continue the agent loop with retry feedback
-                    self._agent_loop(workspace, retry_prompt, context, prompt_template)
+                    # Check if commits were made
+                    if not self.workspace_manager.has_commits(workspace, config.github.base_branch):
+                        print("\n⚠️  No commits were made.")
+                        logger.log_warning("No commits made")
+                        if attempt >= max_attempts:
+                            # Try next strategy
+                            if checkpoint_mgr and checkpoint:
+                                print("🔄 Rolling back to checkpoint")
+                                checkpoint_mgr.rollback_to(checkpoint)
+                            break
+                        continue
 
-                # Check if commits were made
-                if not self.workspace_manager.has_commits(workspace, config.github.base_branch):
-                    print("\n⚠️  No commits were made. Aborting.")
-                    self.workspace_manager.return_to_base_branch(workspace, config.github.base_branch)
-                    return
+                    print("\n✅ Implementation phase complete")
+                    logger.log_phase("implementation", "end")
 
-                print("\n✅ Implementation phase complete")
+                    # Track usage if enabled
+                    if self.resource_manager:
+                        usage = self.resource_manager.get_issue_usage()
+                        logger.log_metrics({
+                            "tokens_used": usage.tokens,
+                            "cost_so_far": usage.cost
+                        })
 
-                # Reset conversation for verification (fresh perspective)
-                # Re-initialize with project context
-                print("\n   🔄 Resetting conversation for verification (fresh perspective)")
-                self.agent.reset_conversation()
-                self.agent.initialize_with_project_context(
-                    project_context=context,
-                    coding_standards=prompt_template
-                )
+                    # Reset conversation for verification (fresh perspective)
+                    print("\n🔄 Resetting conversation for verification (fresh perspective)")
+                    self.agent.reset_conversation()
+                    self.agent.initialize_with_project_context(
+                        project_context=enhanced_context,
+                        coding_standards=prompt_template
+                    )
 
-                # PHASE 2: Single Combined Verification
-                print("\n" + "=" * 70)
-                print("🔍 PHASE 2: COMBINED VERIFICATION")
-                print("=" * 70)
-                print("Running all quality checks in single pass...")
+                    # PHASE 2: Quality Gates
+                    print("\n" + "=" * 70)
+                    print("🔍 PHASE 2: QUALITY VERIFICATION")
+                    print("=" * 70)
+                    logger.log_phase("quality_verification", "start")
 
-                verification_passed, verification_feedback = self._verify_implementation_combined(
-                    workspace, context, prompt_template, issue
-                )
+                    if quality_gate:
+                        # Use quality gate system
+                        report = quality_gate.check_all()
+                        quality_gate.print_report(report)
+                        logger.log_info("Quality gates checked", {
+                            "passed": report.passed,
+                            "critical_failures": len(report.critical_failures)
+                        })
 
-                if verification_passed:
-                    print("\n✅ All verifications passed!")
-                    break
-                else:
+                        if report.has_critical_failures:
+                            print("\n❌ CRITICAL quality failures - cannot proceed")
+                            verification_passed = False
+                            verification_feedback = "\n".join([
+                                f"CRITICAL: {f.message}" for f in report.critical_failures
+                            ])
+                        elif not report.passed:
+                            print("\n⚠️  Some quality checks failed")
+                            verification_passed = False
+                            verification_feedback = "\n".join([
+                                f.message for f in report.required_failures + report.recommended_failures
+                            ])
+                        else:
+                            print("\n✅ All quality gates passed!")
+                            verification_passed = True
+                    else:
+                        # Fall back to legacy verification
+                        verification_passed, verification_feedback = self._verify_implementation_combined(
+                            workspace, enhanced_context, prompt_template, issue
+                        )
+
+                    logger.log_phase("quality_verification", "end", {"passed": verification_passed})
+
+                    if verification_passed:
+                        print("\n✅ Strategy succeeded!")
+                        strategy_success = True
+                        final_strategy_used = strategy.name
+                        break  # Exit attempt loop
+
                     print(f"\n⚠️  Verification failed on attempt {attempt}/{max_attempts}")
 
                     if attempt >= max_attempts:
-                        print("\n⚠️  Max attempts reached. Creating PR anyway with quality warnings...")
-                        break
+                        print(f"\n⚠️  Max attempts reached for {strategy.name}")
+                        # Will try next strategy or exit
+
+                # Check if strategy succeeded
+                if strategy_success:
+                    break  # Exit strategy loop
+
+                # Strategy failed - rollback and try next
+                if checkpoint_mgr and checkpoint:
+                    print(f"\n🔄 Strategy failed. Rolling back to checkpoint...")
+                    checkpoint_mgr.rollback_to(checkpoint)
+                    logger.log_info("Rolled back to checkpoint")
+                else:
+                    print(f"\n⚠️  Strategy failed (no checkpoint available)")
+
+            # After all strategies tried
+            implementation_end_time = __import__('datetime').datetime.now()
+            duration = (implementation_end_time - implementation_start_time).total_seconds()
+
+            # Calculate final metrics
+            if not strategy_success and not self.workspace_manager.has_commits(workspace, config.github.base_branch):
+                print("\n❌ All strategies failed with no successful commits")
+                logger.log_error("All strategies exhausted without success")
+
+                # Record failure
+                outcome = ImplementationOutcome(
+                    success=False,
+                    attempts=len(ranked_strategies) * max_attempts,
+                    quality_passed=False,
+                    cost=self.resource_manager.get_issue_usage().cost if self.resource_manager else 0.0,
+                    time_seconds=duration,
+                    files_changed=0,
+                    lines_changed=0,
+                    strategy_used="none",
+                    error_messages=[verification_feedback] if verification_feedback else ["No commits made"]
+                )
+                self.tracker.record_implementation(config.name, issue, outcome)
+                logger.log_metrics({"success": False, "duration": duration})
+
+                # Create debug bundle
+                bundle = logger.create_debug_bundle(workspace)
+                print(f"\n💡 Debug bundle created at: {bundle}")
+
+                self.workspace_manager.return_to_base_branch(workspace, config.github.base_branch)
+                return
 
             # Show summary
             self.workspace_manager.show_summary(workspace, config.github.base_branch)
+
+            # Count changes
+            result = subprocess.run(
+                ["git", "diff", config.github.base_branch, "--shortstat"],
+                cwd=workspace,
+                capture_output=True,
+                text=True
+            )
+            stats = result.stdout.strip()
+            files_changed = 0
+            lines_changed = 0
+            if "file" in stats:
+                import re
+                file_match = re.search(r'(\d+) file', stats)
+                if file_match:
+                    files_changed = int(file_match.group(1))
+                lines_match = re.search(r'(\d+) insertion', stats)
+                if lines_match:
+                    lines_changed = int(lines_match.group(1))
+
+            # Record successful outcome
+            outcome = ImplementationOutcome(
+                success=True,
+                attempts=strategy_idx if strategy_success else len(ranked_strategies),
+                quality_passed=verification_passed,
+                cost=self.resource_manager.get_issue_usage().cost if self.resource_manager else 0.0,
+                time_seconds=duration,
+                files_changed=files_changed,
+                lines_changed=lines_changed,
+                strategy_used=final_strategy_used or "unknown",
+                error_messages=[] if verification_passed else [verification_feedback]
+            )
+            self.tracker.record_implementation(config.name, issue, outcome)
+            logger.log_metrics({
+                "success": True,
+                "duration": duration,
+                "strategy": final_strategy_used,
+                "quality_passed": verification_passed
+            })
 
             # Push and create PR
             print("\n" + "=" * 70)
             print("🚀 CREATING PULL REQUEST")
             print("=" * 70)
+            logger.log_phase("pr_creation", "start")
 
             self.workspace_manager.push_changes(workspace, branch_name)
 
-            # Create PR body with quality warnings if verification failed
-            pr_body = f"🤖 Automated implementation by OpenAI\n\nCloses #{issue.number}\n\n{issue.body or ''}"
+            # Create PR body
+            pr_body = f"""🤖 Automated implementation by VÄKI AI
+
+**Strategy Used:** {final_strategy_used or 'Standard Implementation'}
+**Quality Status:** {'✅ All checks passed' if verification_passed else '⚠️ See quality notes below'}
+**Files Changed:** {files_changed}
+**Implementation Time:** {duration/60:.1f}m
+
+Closes #{issue.number}
+
+---
+
+{issue.body or 'No description provided'}
+"""
 
             if not verification_passed:
-                pr_body += f"\n\n---\n\n⚠️ **Quality Notice:** This PR was created after {max_attempts} attempts; some automated quality checks did not pass and require manual review."
+                pr_body += f"\n\n## ⚠️ Quality Notice\n\nSome automated quality checks did not pass. Please review carefully:\n\n{verification_feedback}\n"
+
+            if self.resource_manager:
+                usage = self.resource_manager.get_issue_usage()
+                pr_body += f"\n\n---\n*Cost: ${usage.cost:.2f} | Tokens: {usage.tokens:,}*"
 
             pr = self.github_client.create_pull_request(
                 repo_name=config.github.repo,
-                title=f"[OpenAI] {issue.title}",
+                title=f"[VÄKI] {issue.title}",
                 body=pr_body,
                 head=branch_name,
                 base=config.github.base_branch
             )
             print(f"\n✅ Pull Request created: {pr.html_url}")
+            logger.log_info("PR created", {"url": pr.html_url})
+            logger.log_phase("pr_creation", "end")
+
+            # Print resource usage summary
+            if self.resource_manager:
+                print("\n" + "=" * 70)
+                print("💰 RESOURCE USAGE")
+                print("=" * 70)
+                self.resource_manager.print_usage_summary()
 
             # Return to base branch
             self.workspace_manager.return_to_base_branch(workspace, config.github.base_branch)
@@ -282,7 +600,9 @@ Respond NOW with ONLY a JSON array:"""
         workspace: Path,
         initial_prompt: str,
         context: str,
-        prompt_template: str
+        prompt_template: str,
+        incremental_validator: Optional[IncrementalValidator] = None,
+        logger: Optional[ImplementationLogger] = None
     ) -> None:
         """
         Run the agent loop to implement changes.
@@ -292,6 +612,8 @@ Respond NOW with ONLY a JSON array:"""
             initial_prompt: Initial prompt to send to agent
             context: Project context (kept for re-initialization if needed)
             prompt_template: Coding standards template (kept for re-initialization if needed)
+            incremental_validator: Optional validator for real-time feedback
+            logger: Optional logger for recording actions
 
         Note:
             Agent should already be initialized with project context via
@@ -368,13 +690,48 @@ Respond with JSON array of actions:"""
                     )
                     continue
 
-                feedback = self._execute_actions(workspace, valid_actions)
+                feedback = self._execute_actions(workspace, valid_actions, logger)
+
+                # Incremental validation after actions
+                if incremental_validator:
+                    for action in valid_actions:
+                        action_type = action.get('action')
+                        if incremental_validator.should_validate(action_type):
+                            file_path = action.get('path') if action_type in ['write_file', 'edit_file'] else None
+                            validation_result = incremental_validator.validate_change(file_path)
+
+                            if not validation_result.passed:
+                                print(f"\n⚠️  Incremental validation failed:")
+                                for error in validation_result.errors:
+                                    print(f"   • {error}")
+                                feedback += f"\n\n⚠️ VALIDATION ERRORS:\n" + "\n".join(validation_result.errors)
+                                if logger:
+                                    logger.log_warning("Incremental validation failed", {
+                                        "errors": validation_result.errors
+                                    })
+                            elif validation_result.warnings:
+                                print(f"\n💡 Validation warnings:")
+                                for warning in validation_result.warnings:
+                                    print(f"   • {warning}")
+
+                # Track resource usage
+                if self.resource_manager:
+                    # Estimate tokens used (rough approximation)
+                    self.resource_manager.record_usage(
+                        input_tokens=len(str(valid_actions)) // 4,
+                        output_tokens=len(feedback) // 4,
+                        operation="agent_loop"
+                    )
 
                 # Check if done
                 if any(action.get('action') == 'done' for action in valid_actions):
                     done_action = next(a for a in valid_actions if a.get('action') == 'done')
                     print(f"\n✅ Implementation complete!")
                     print(f"Summary: {done_action.get('summary', 'No summary provided')}")
+                    if logger:
+                        logger.log_info("Implementation marked as done", {
+                            "summary": done_action.get('summary')
+                        })
                     return
 
                 # Send feedback for next iteration
@@ -425,13 +782,14 @@ Respond with JSON array of actions:"""
 
         return "\n".join(contents) if contents else "No files to read"
 
-    def _execute_actions(self, workspace: Path, actions: List[Action]) -> str:
+    def _execute_actions(self, workspace: Path, actions: List[Action], logger: Optional[ImplementationLogger] = None) -> str:
         """
         Execute a list of actions.
 
         Args:
             workspace: Project workspace
             actions: List of action dictionaries with proper type annotations
+            logger: Optional logger for recording actions
 
         Returns:
             Feedback message about executed actions
@@ -458,6 +816,10 @@ Respond with JSON array of actions:"""
 
             results.append(result)
             print(result)
+
+            # Log action
+            if logger:
+                logger.log_action(action, result)
 
         return "\n".join(results)
 

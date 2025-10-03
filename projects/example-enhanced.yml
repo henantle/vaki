@@ -1,0 +1,141 @@
+# Enhanced Project Configuration Example
+# This configuration showcases all available features and improvements
+
+name: "Example Enhanced Project"
+description: "Production-grade project with all quality and safety features enabled"
+
+# GitHub repository configuration
+github:
+  repo: "your-org/your-repo"
+  base_branch: "main"
+  username: "your-github-username"
+  email: "your-email@example.com"
+
+# Issue filtering
+filters:
+  assignee: "your-github-username"
+  labels: ["enhancement", "bug"]
+  state: "open"
+
+# Workspace configuration
+workspace:
+  temp_dir: "/tmp/vaki-workspaces"
+
+# Project context file
+context: "contexts/your-project-context.md"
+
+# Coding standards template
+prompt_template: "templates/your-coding-standards.md"
+
+# ============================================================================
+# ENHANCED FEATURES
+# ============================================================================
+
+# Quality gate configuration
+quality:
+  mode: "strict"  # Options: strict, standard, permissive
+
+  # Critical gates (MUST pass - no PR created if these fail)
+  critical_gates:
+    - security_check
+    - syntax_check
+    - breaking_changes
+
+  # Required gates (should pass - warnings added to PR if not)
+  required_gates:
+    - type_check
+    - tests_pass
+    - build
+    - lint
+
+  # Minimum test coverage percentage
+  min_coverage: 80
+
+# Ticket analysis configuration
+ticket_analysis:
+  enabled: true
+  min_clarity_score: 70  # 0-100 scale
+  ask_for_clarification: true  # Post GitHub comments when unclear
+
+# Implementation strategy
+implementation:
+  mode: "progressive"  # Options: progressive, single-shot
+
+  # Implementation phases (progressive mode)
+  phases:
+    - research      # Understand codebase
+    - design        # Plan approach
+    - implement     # Write code
+    - test          # Verify works
+
+  # Validate after each file change
+  incremental_validation: true
+
+  # Generate multiple strategies and pick best
+  multi_strategy: true
+  max_strategies: 3
+
+  # Create checkpoints for rollback
+  use_checkpoints: true
+
+# Human oversight configuration
+human_oversight:
+  mode: "checkpoints"  # Options: auto, checkpoints, interactive
+
+  # Request human approval for:
+  require_approval_for:
+    - breaking_changes
+    - security_changes
+    - database_migrations
+    - large_refactors
+
+# Resource limits (cost control)
+resources:
+  daily_cost_limit: 50.00      # Max $ per day
+  per_issue_cost_limit: 10.00  # Max $ per issue
+  per_issue_token_limit: 200000  # Max tokens per issue
+  max_implementation_time: 1800   # Max 30 minutes per issue
+
+# Learning and analytics
+learning:
+  enabled: true
+  track_outcomes: true    # Record implementation results
+  use_insights: true      # Use historical data to improve
+
+# ============================================================================
+# FEATURE EXPLANATIONS
+# ============================================================================
+
+# QUALITY MODES:
+# - strict: All critical and required gates must pass
+# - standard: Critical gates must pass, required gates are warnings
+# - permissive: Only critical gates must pass
+
+# IMPLEMENTATION MODES:
+# - progressive: Multi-phase with validation gates between phases
+# - single-shot: Traditional approach, all-at-once implementation
+
+# HUMAN OVERSIGHT MODES:
+# - auto: Fully automated, no human intervention
+# - checkpoints: Human approval at key decision points
+# - interactive: Human approval for all significant changes
+
+# TYPICAL CONFIGURATIONS:
+
+# Production (safest):
+# quality.mode: strict
+# implementation.mode: progressive
+# human_oversight.mode: checkpoints
+# resources: strict limits
+
+# Development (balanced):
+# quality.mode: standard
+# implementation.mode: progressive
+# human_oversight.mode: auto
+# resources: moderate limits
+
+# Experimentation (fastest):
+# quality.mode: permissive
+# implementation.mode: single-shot
+# human_oversight.mode: auto
+# resources: relaxed limits
