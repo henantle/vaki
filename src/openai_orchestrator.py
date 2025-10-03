@@ -340,8 +340,8 @@ class OpenAIOrchestrator:
 
         # Get insights from past implementations
         insights = self.tracker.get_insights(config.name)
-        if insights.total_attempts > 0:
-            print(f"\n📊 Historical Insights: {insights.success_rate:.1%} success rate over {insights.total_attempts} attempts")
+        if insights.total_implementations > 0:
+            print(f"\n📊 Historical Insights: {insights.success_rate:.1%} success rate over {insights.total_implementations} implementations")
             suggestions = self.tracker.suggest_improvements(config.name, [label.name for label in issue.labels])
             if suggestions:
                 print("💡 Suggestions based on history:")
