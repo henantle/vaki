@@ -9,13 +9,13 @@ from openai import OpenAI
 class OpenAIAgent:
     """Agent that uses OpenAI API to implement code changes."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4o"):
+    def __init__(self, api_key: str, model: str = "gpt-5.0"):
         """
         Initialize OpenAI agent.
 
         Args:
             api_key: OpenAI API key
-            model: Model to use (default: gpt-4o)
+            model: Model to use (default: gpt-5.0)
         """
         self.client = OpenAI(api_key=api_key)
         self.model = model

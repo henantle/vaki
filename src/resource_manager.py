@@ -40,6 +40,10 @@ class ResourceManager:
 
     # Pricing (as of 2024 - update as needed)
     PRICING = {
+        "gpt-5.0": {
+            "input": 5.00 / 1_000_000,   # $5.00 per 1M input tokens (estimated)
+            "output": 15.00 / 1_000_000,  # $15.00 per 1M output tokens (estimated)
+        },
         "gpt-4o": {
             "input": 2.50 / 1_000_000,   # $2.50 per 1M input tokens
             "output": 10.00 / 1_000_000,  # $10.00 per 1M output tokens
@@ -54,7 +58,7 @@ class ResourceManager:
         self,
         budget: BudgetConfig,
         storage_path: Optional[Path] = None,
-        model: str = "gpt-4o"
+        model: str = "gpt-5.0"
     ):
         """
         Initialize resource manager.

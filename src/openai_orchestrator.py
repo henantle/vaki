@@ -188,7 +188,7 @@ class OpenAIOrchestrator:
                 per_issue_cost_limit=config.resources.per_issue_cost_limit,
                 per_issue_token_limit=config.resources.per_issue_token_limit
             )
-            self.resource_manager = ResourceManager(budget, model="gpt-4o")
+            self.resource_manager = ResourceManager(budget, model="gpt-5.0")
             self.resource_manager.start_issue_tracking()
             logger.log_info("Resource tracking enabled", {
                 "daily_limit": budget.daily_cost_limit,

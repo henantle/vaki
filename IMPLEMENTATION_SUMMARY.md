@@ -138,7 +138,7 @@ for file_info in relevant_files:
 - Cost estimation before implementation
 - Automatic cost alerts at 80% and 90%
 - Multi-day usage reports
-- GPT-4o and GPT-4o-mini pricing
+- GPT-5.0, GPT-4o, and GPT-4o-mini pricing
 
 **Usage:**
 ```python
@@ -150,7 +150,7 @@ budget = BudgetConfig(
     per_issue_token_limit=200000
 )
 
-resource_mgr = ResourceManager(budget, model="gpt-4o")
+resource_mgr = ResourceManager(budget, model="gpt-5.0")
 
 # Before starting
 estimate = resource_mgr.get_cost_estimate(len(context), issue_complexity=7)
@@ -417,7 +417,7 @@ class OpenAIOrchestrator:
         # New components
         self.ticket_analyzer = TicketAnalyzer(self.agent, self.github_client)
         self.codebase_analyzer = None  # Created per workspace
-        self.resource_manager = ResourceManager(budget, model="gpt-4o")
+        self.resource_manager = ResourceManager(budget, model="gpt-5.0")
         self.tracker = ImplementationTracker()
         self.strategy_evaluator = StrategyEvaluator(self.agent)
 ```
@@ -563,7 +563,7 @@ print("\n✅ All configurations working\n")
 # Test resource manager
 print("✅ Testing ResourceManager...")
 budget = BudgetConfig(daily_cost_limit=50.00, per_issue_cost_limit=10.00)
-resource_mgr = ResourceManager(budget, model="gpt-4o")
+resource_mgr = ResourceManager(budget, model="gpt-5.0")
 print(f"   Can run operation: {resource_mgr.check_quota('test', 1000)}")
 resource_mgr.record_usage(1000, 500, "test")
 print(f"   Session usage: {resource_mgr.session_usage.tokens} tokens")
