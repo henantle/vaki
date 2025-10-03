@@ -1,425 +1,355 @@
-# Quick Start: Enhanced VÄKI System
+# Quick Start Guide
 
-Get started with the enterprise-grade automated implementation system in 5 minutes.
+**Get VÄKI running in 2-5 minutes**
+
+Choose your path:
+- 🏃 **[Fast Track](#fast-track-2-minutes)** - Run your first issue NOW (minimal setup)
+- 🎯 **[Full Setup](#full-setup-5-minutes)** - All features enabled (recommended)
 
 ---
 
 ## Prerequisites
 
+You need:
 - Python 3.8+
-- GitHub account with repo access
-- OpenAI API key
-- Git configured locally
+- Git
+- GitHub account + token ([create here](https://github.com/settings/tokens))
+- OpenAI API key ([get here](https://platform.openai.com/api-keys))
+
+**First time?** Get your tokens first, then come back!
 
 ---
 
-## Step 1: Basic Setup (2 minutes)
+# Fast Track (2 minutes)
+
+**Goal:** Run VÄKI on one issue RIGHT NOW
+
+## Step 1: Install (30 seconds)
 
 ```bash
-# 1. Install dependencies
 pip install -r requirements.txt
-
-# 2. Set environment variables
-export GITHUB_TOKEN="your-github-token"
-export OPENAI_API_KEY="your-openai-key"
+export GITHUB_TOKEN="ghp_your_token_here"
+export OPENAI_API_KEY="sk_your_key_here"
 ```
 
 ---
 
-## Step 2: Create Project Configuration (2 minutes)
+## Step 2: Minimal Config (1 minute)
 
-```bash
-# Copy example configuration
-cp projects/example-enhanced.yml projects/my-project.yml
-```
-
-Edit `projects/my-project.yml`:
+Create `projects/myproject.yml` with just 3 things changed:
 
 ```yaml
-name: "My Project"
-description: "Your project description"
+name: myproject
 
 github:
-  repo: "your-org/your-repo"      # Change this
+  repo: "your-org/your-repo"        # ← CHANGE THIS
   base_branch: "main"
-  username: "your-github-username" # Change this
-  email: "your-email@example.com"  # Change this
+  username: "your-github-username"  # ← CHANGE THIS
+  email: "your-email@example.com"   # ← CHANGE THIS
 
 filters:
-  assignee: "your-github-username" # Change this
-  labels: ["enhancement", "bug"]
+  assignee: "your-github-username"  # ← CHANGE THIS
   state: "open"
+```
 
-workspace:
-  temp_dir: "/tmp/vaki-workspaces"
+**That's it!** This is enough to get started.
 
-context: "contexts/your-context.md"           # Optional
-prompt_template: "templates/your-template.md" # Optional
+---
 
-# ============= ENHANCED FEATURES =============
+## Step 3: Run It! (30 seconds)
 
-# Quality enforcement (recommended)
+```bash
+# Process a specific issue (recommended for first try)
+python main.py run myproject 42 --mode=openai
+
+# Or process all assigned issues
+python main.py run myproject --mode=openai
+```
+
+**That's it!** VÄKI will implement the issue and create a PR.
+
+---
+
+## What Just Happened?
+
+VÄKI just:
+1. 📋 Read your GitHub issue
+2. 🔍 Analyzed your codebase
+3. ⚙️ Implemented the changes
+4. ✅ Ran basic checks
+5. 🚀 Created a pull request
+
+**Next:** Review the PR and merge if it looks good!
+
+---
+
+# Full Setup (5 minutes)
+
+**Want all the enterprise features?** Add these to your config.
+
+## Enhanced Configuration
+
+Start with your minimal config and add these features:
+
+### 1. Quality Gates (Highly Recommended)
+
+**What:** Won't create PRs with critical issues
+**Why:** Ensures high code quality automatically
+
+```yaml
 quality:
-  mode: "standard"  # Options: strict, standard, permissive
+  mode: "standard"  # strict, standard, or permissive
   critical_gates:
     - security_check
     - syntax_check
   required_gates:
     - type_check
     - tests_pass
+```
 
-# Ticket analysis (highly recommended)
+### 2. Budget Limits (Highly Recommended)
+
+**What:** Stops before overspending on API calls
+**Why:** Predictable costs, no surprises
+
+```yaml
+resources:
+  daily_cost_limit: 50.00      # Max $50 per day
+  per_issue_cost_limit: 10.00  # Max $10 per issue
+```
+
+### 3. Ticket Analysis (Recommended)
+
+**What:** Checks if issue is clear before implementing
+**Why:** 50-70% fewer failed implementations
+
+```yaml
 ticket_analysis:
   enabled: true
   min_clarity_score: 70
   ask_for_clarification: true
+```
 
-# Resource limits (recommended)
-resources:
-  daily_cost_limit: 50.00
-  per_issue_cost_limit: 10.00
+### 4. Multi-Strategy (Optional)
 
-# Multi-strategy (optional but recommended)
+**What:** Tries multiple approaches, picks best one
+**Why:** Better solutions, automatic fallback if first fails
+
+```yaml
 implementation:
   multi_strategy: true
   use_checkpoints: true
   incremental_validation: true
+```
 
-# Learning (recommended)
+### 5. Learning System (Optional)
+
+**What:** Learns from past implementations
+**Why:** Gets smarter over time
+
+```yaml
 learning:
   enabled: true
   track_outcomes: true
 ```
 
----
-
-## Step 3: Run Your First Enhanced Implementation (1 minute)
-
-```bash
-# Process all assigned issues
-python main.py my-project
-
-# Or process a specific issue
-python main.py my-project --issue 123
-```
+**See all features explained:** [FEATURES.md](FEATURES.md)
 
 ---
 
-## What Happens Now?
+## Example Output (With All Features Enabled)
 
-The enhanced system will:
-
-1. **📋 Analyze Ticket** (if enabled)
-   - Check clarity score
-   - Identify missing information
-   - Request clarification if needed
-
-2. **💰 Check Budget**
-   - Estimate cost
-   - Ensure within limits
-
-3. **🔍 Analyze Codebase**
-   - Detect tech stack
-   - Understand architecture
-
-4. **🎯 Generate Strategies** (if enabled)
-   - Create 3 implementation approaches
-   - Rank by safety/quality/speed
-
-5. **⚙️ Implement with Safety**
-   - Create checkpoint
-   - Execute with validation
-   - Auto-rollback if fails
-
-6. **✅ Enforce Quality**
-   - Run critical checks
-   - Run required checks
-   - Report any issues
-
-7. **🚀 Create PR**
-   - With quality badge
-   - Cost metrics
-   - Strategy used
-
-8. **📊 Learn**
-   - Record outcome
-   - Update insights
-   - Improve over time
-
----
-
-## Example Output
+Here's what you'll see when running with full features:
 
 ```
-======================================================================
-🤖 AUTO-PROCESSING ISSUE #42
-======================================================================
-Title: Add dark mode toggle
-URL: https://github.com/org/repo/issues/42
+🤖 AUTO-PROCESSING ISSUE #42: Add dark mode toggle
 
-======================================================================
-📋 PHASE 0: TICKET ANALYSIS
-======================================================================
-✅ Ticket Analysis Complete
+📋 TICKET ANALYSIS
    Clarity Score: 85/100 ✅
-   Implementable: Yes
-   Estimated Complexity: 6/10
-   Risk Level: medium
+   💰 Cost Estimate: $2.50
 
-💰 Cost Estimate: $2.50 (125,000 tokens)
-
-======================================================================
 🔍 CODEBASE ANALYSIS
-======================================================================
-**Tech Stack:** React, TypeScript, Tailwind CSS
-**Framework:** Next.js 14
-**Pattern:** Component-based architecture
+   Tech Stack: React + TypeScript + Next.js 14
 
-======================================================================
-🎯 STRATEGY GENERATION
-======================================================================
-Generated 3 strategies:
-1. Context API Implementation (Score: 8.5)
-2. CSS Variables Approach (Score: 7.8)
-3. Third-party Theme Library (Score: 6.2)
+🎯 MULTI-STRATEGY
+   Generated 3 strategies, trying best first:
+   1. Context API Implementation (Score: 8.5) ← Trying this
 
-✅ Generated 3 strategies (ranked by criteria)
+📍 Checkpoint created
 
-📊 Historical Insights: 87.5% success rate over 8 attempts
-💡 Suggestions based on history:
-   • Similar UI features succeeded with Context API approach
-   • Testing is critical for this project - ensure coverage
+⚙️  IMPLEMENTATION
+   ✅ Created: src/contexts/ThemeContext.tsx
+   ✅ Updated: src/components/Layout.tsx
+   ✅ Committed changes
 
-======================================================================
-🎯 STRATEGY 1/3: Context API Implementation
-======================================================================
-Approach: Create React Context for theme state...
-Risk: medium | Complexity: 6/10
-
-📍 Checkpoint created: a3b2c1d4
-
-──────────────────────────────────────────────────────────────────────
-🔄 ATTEMPT 1/3 for Context API Implementation
-──────────────────────────────────────────────────────────────────────
-
-⚙️  PHASE 1: IMPLEMENTATION
-
-✅ Read file: src/components/Layout.tsx
-✅ Wrote file: src/contexts/ThemeContext.tsx
-✅ Edited file: src/components/Layout.tsx
-✅ Committed: feat: add theme context and dark mode toggle
-
-✅ Implementation phase complete
-
-🔄 Resetting conversation for verification (fresh perspective)
-
-======================================================================
-🔍 PHASE 2: QUALITY VERIFICATION
-======================================================================
-
-📋 Running automated quality checks...
+✅ QUALITY CHECKS
    ✅ Type Check
-   ✅ Tests
-   ✅ Build
+   ✅ Tests Pass
+   ✅ Build Success
 
-🤖 AI reviewing code quality, requirements, and UI...
-   ✅ Code Quality
-   ✅ Requirements Met
-   ✅ UI Functional
+🚀 Pull Request created!
+   https://github.com/org/repo/pull/123
 
-📊 Overall: ✅ PASSED
-
-✅ Strategy succeeded!
-
-======================================================================
-🚀 CREATING PULL REQUEST
-======================================================================
-
-✅ Pull Request created: https://github.com/org/repo/pull/123
-
-======================================================================
 💰 RESOURCE USAGE
-======================================================================
-Session Usage:
-  Tokens: 118,432 (94.7% of estimate)
-  Cost: $2.38 (95.2% of estimate)
-
-Daily Budget:
-  Used: $2.38 / $50.00 (4.8%)
-  Remaining: $47.62
-
-Issue Budget:
-  Used: $2.38 / $10.00 (23.8%)
-  Remaining: $7.62
-
-✅ All budgets within limits
+   Cost: $2.38 (within budget)
+   Daily: $2.38 / $50.00 (5%)
 ```
+
+**With minimal config:** Same process, just skips ticket analysis and multi-strategy.
 
 ---
 
-## Configuration Presets
+## Quick Config Templates
 
-### Conservative (Safest)
+Copy one of these based on your needs:
+
+### 🛡️ Conservative (Maximum Safety)
 ```yaml
+# Best for: Production environments, critical projects
 quality:
-  mode: "strict"
+  mode: "strict"          # Strictest quality checks
 ticket_analysis:
-  enabled: true
-  min_clarity_score: 80
-implementation:
-  multi_strategy: true
-  max_strategies: 3
+  min_clarity_score: 80   # Only clear tickets
 resources:
-  daily_cost_limit: 30.00
-  per_issue_cost_limit: 5.00
+  per_issue_cost_limit: 5.00  # Low budget per issue
 ```
 
-### Balanced (Recommended)
+### ⚖️ Balanced (Recommended Start)
 ```yaml
+# Best for: Most teams, testing VÄKI
 quality:
   mode: "standard"
 ticket_analysis:
-  enabled: true
   min_clarity_score: 70
-implementation:
-  multi_strategy: true
 resources:
-  daily_cost_limit: 50.00
   per_issue_cost_limit: 10.00
 ```
 
-### Aggressive (Fastest)
+### ⚡ Fast (Speed Priority)
 ```yaml
+# Best for: Quick fixes, low-risk projects
 quality:
-  mode: "permissive"
+  mode: "permissive"      # Fewer checks
 ticket_analysis:
-  enabled: false
-implementation:
-  multi_strategy: false
+  enabled: false          # Skip analysis
 resources:
-  daily_cost_limit: 100.00
   per_issue_cost_limit: 20.00
 ```
 
 ---
 
-## Common Tasks
+## Common Scenarios
 
-### Enable Only Ticket Analysis
-```yaml
-ticket_analysis:
-  enabled: true
-# Don't include other enhancement configs
+### "I just want to try it"
+Use the Fast Track minimal config. Run on one simple issue.
+
+### "I need strict quality for production"
+Add quality gates with `mode: "strict"` and set low cost limits.
+
+### "I want to enable features gradually"
+Start minimal, then add one feature at a time:
+1. First run: basic config
+2. Add budget limits
+3. Add quality gates
+4. Add ticket analysis
+5. Add multi-strategy
+
+### "I have Slack/email requests, not GitHub issues"
+Use the manual ticket mode:
+```bash
+python main.py ticket myproject --source=slack
+# Paste text, press Ctrl+D
 ```
 
-### Add Budget Limits Only
-```yaml
-resources:
-  daily_cost_limit: 50.00
-  per_issue_cost_limit: 10.00
-# Don't include other enhancement configs
-```
-
-### Full Enterprise Mode
-```yaml
-# Include all enhancement sections
-quality: {...}
-ticket_analysis: {...}
-implementation: {...}
-resources: {...}
-learning: {...}
-```
-
-### Legacy Mode (No Enhancements)
-```yaml
-# Just include the basic required fields
-name: "..."
-github: {...}
-filters: {...}
-# No enhancement configs
-```
+See: [MANUAL_TICKETS.md](MANUAL_TICKETS.md)
 
 ---
 
 ## Troubleshooting
 
-### Issue: "Budget exceeded"
-**Solution:** Increase limits in `resources` config or wait until next day.
+**Problem:** "Budget exceeded"
+**Fix:** Increase `per_issue_cost_limit` or wait until tomorrow
 
-### Issue: "Ticket clarity too low"
-**Solution:**
-- Answer clarification questions posted to GitHub issue
-- Or lower `min_clarity_score`
-- Or disable `ask_for_clarification`
+**Problem:** "Ticket clarity too low"
+**Fix:** Make your issue more detailed or lower `min_clarity_score`
 
-### Issue: "Critical quality gates failed"
-**Solution:**
-- Check error messages in output
-- Fix issues manually
-- Or change `quality.mode` to "standard"
+**Problem:** "Quality gates failed"
+**Fix:** Check the error messages, fix manually, or use `mode: "permissive"`
 
-### Issue: "All strategies failed"
-**Solution:**
-- Check `.vaki/logs/` for debug bundle
-- Review implementation_logger output
-- Consider simplifying the issue
-- Try with `multi_strategy: false`
+**Problem:** "Command not found"
+**Fix:** Make sure you're in the vaki directory and ran `pip install -r requirements.txt`
+
+**Problem:** "GitHub token invalid"
+**Fix:** Create a new token at https://github.com/settings/tokens with repo permissions
 
 ---
 
-## Best Practices
+## Tips for Success
 
-1. **Start Conservative**
-   - Use "standard" quality mode
-   - Enable ticket analysis
-   - Set reasonable budget limits
+### 1. Start Small
+Run on 1-2 simple issues first. Learn how VÄKI works before automating everything.
 
-2. **Monitor First Run**
-   - Watch the output carefully
-   - Check generated PR quality
-   - Adjust configuration based on results
+### 2. Always Review PRs
+VÄKI is smart, but you're the boss. Review code before merging, always.
 
-3. **Iterate Configuration**
-   - Start with basic enhancements
-   - Add features gradually
-   - Tune thresholds based on experience
+### 3. Set Budget Limits
+Typical costs:
+- Bug fix: $1-3
+- Small feature: $3-6
+- Large feature: $8-15
 
-4. **Review Historical Data**
-   - Check `.vaki/implementations.jsonl`
-   - Look for patterns in failures
-   - Adjust strategy based on insights
+Start with `per_issue_cost_limit: 10.00` and adjust.
 
-5. **Set Appropriate Budgets**
-   - Small fixes: $2-5 per issue
-   - Medium features: $5-10 per issue
-   - Large refactors: $10-20 per issue
+### 4. Write Clear Issues
+Help VÄKI help you:
+- ✅ "Add dark mode toggle to settings page"
+- ❌ "Make UI better"
 
----
+### 5. Enable Features Gradually
+Don't turn everything on day 1. Add features as you need them.
 
-## Getting Help
-
-- **Detailed Docs:** `IMPLEMENTATION_SUMMARY.md`
-- **Architecture:** `ARCHITECTURE_IMPROVEMENTS.md`
-- **Configuration:** `projects/example-enhanced.yml`
-- **Status:** `INTEGRATION_COMPLETE.md`
+### 6. Check the Logs
+When something fails, check `.vaki/logs/` for debug info.
 
 ---
 
-## Success Checklist
+## Next Steps
 
-Before running in production:
+**Just Getting Started?**
+1. Run the Fast Track (2 minutes)
+2. Try 2-3 simple issues
+3. Read [FEATURES.md](FEATURES.md) to understand what's possible
 
-- [ ] Created project configuration
-- [ ] Set GitHub token and OpenAI key
-- [ ] Configured filters (assignee, labels)
-- [ ] Enabled ticket analysis (recommended)
-- [ ] Set budget limits (recommended)
-- [ ] Tested with 1-2 simple issues first
-- [ ] Reviewed generated PRs
-- [ ] Tuned configuration based on results
+**Ready for Production?**
+1. Add quality gates
+2. Set budget limits
+3. Enable ticket analysis
+4. Review [best practices](README.md#common-questions)
+
+**Want to Learn More?**
+- 📘 [Features Guide](FEATURES.md) - What each feature does
+- 📗 [Manual Tickets](MANUAL_TICKETS.md) - Process tickets from Slack/email
+- 📕 [Technical Details](IMPLEMENTATION_SUMMARY.md) - For developers
 
 ---
 
-**You're ready to go! 🚀**
+## Quick Checklist
 
-Run `python main.py my-project` and watch the magic happen.
+Before your first run:
+
+- [ ] Installed dependencies (`pip install -r requirements.txt`)
+- [ ] Set `GITHUB_TOKEN` and `OPENAI_API_KEY`
+- [ ] Created `projects/myproject.yml`
+- [ ] Updated repo, username, email in config
+- [ ] Have an issue to test with
+
+**Ready?** Run:
+```bash
+python main.py run myproject 42 --mode=openai
+```
+
+---
+
+**You're all set! VÄKI is ready to save you hours of work.** 🚀
+
+Questions? Check [README.md](README.md) or [FEATURES.md](FEATURES.md)

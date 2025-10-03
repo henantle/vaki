@@ -1,5 +1,11 @@
 # Implementation Summary: All Improvements Completed
 
+> **👋 Just want to use the features?** Check out **[FEATURES.md](FEATURES.md)** for a user-friendly guide.
+>
+> **This document is for developers** who want to understand the technical implementation details and integrate the modules into their own code.
+
+---
+
 ## Overview
 
 All 12 major architectural improvements have been implemented as independent, production-ready modules. This document summarizes what's been built and how to integrate it.
